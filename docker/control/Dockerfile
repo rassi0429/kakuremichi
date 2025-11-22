@@ -33,14 +33,24 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# Copy WebSocket server source
+COPY --from=builder --chown=nextjs:nodejs /app/src ./src
+COPY --from=builder /app/node_modules ./node_modules
+
+# Copy startup script
+COPY --from=builder --chown=nextjs:nodejs /app/start.sh ./start.sh
+RUN chmod +x start.sh
+
 # Create data directory for SQLite
 RUN mkdir -p /app/data && chown nextjs:nodejs /app/data
 
 USER nextjs
 
-EXPOSE 3000
+# Expose both HTTP and WebSocket ports
+EXPOSE 3000 3001
 
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+ENV WS_PORT=3001
 
-CMD ["node", "server.js"]
+CMD ["./start.sh"]
