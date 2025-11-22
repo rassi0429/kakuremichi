@@ -173,13 +173,14 @@ CloudFlare Tunnelのようなリバースプロキシシステム。
 
 ---
 
-### ユースケース5: Docker Composeで簡単公開
+### ユースケース5: Docker Composeで簡単公開（CloudFlareスタイル）
 **アクター**: Docker利用者
 
 **前提条件**:
 - docker-composeでアプリケーションを動かしている
 - リバースプロキシ（NginxやTraefik）を置きたくない
 - 簡単に外部公開したい
+- Controlのアカウントを既に持っている
 
 **ストーリー**:
 1. 既存のdocker-compose.ymlにAgentコンテナを追加:
@@ -195,22 +196,33 @@ CloudFlare Tunnelのようなリバースプロキシシステム。
        environment:
          - CONTROL_URL=https://control.example.com
          - API_KEY=xxx
-         - TUNNEL_DOMAIN=myapp.example.com
-         - TUNNEL_TARGET=app:3000
+         # ドメインやターゲットの設定は不要！
    ```
 2. `docker-compose up`で起動
+3. ControlのWeb UIにアクセス
+4. 「Agents」ページで、接続されたAgentを確認（オンライン表示）
+5. 「新しいトンネル」ボタンをクリック
+6. 接続されたAgentを選択
+7. トンネル設定を入力:
+   - ドメイン: `myapp.example.com`
+   - ターゲット: `app:3000`（Agentから見える宛先）
+8. 保存
 
 **期待される動作**:
-- Agentが自動的にControlに接続
-- トンネルが自動確立
+- Agentは起動しただけで待機状態
+- **Web UIから設定した瞬間にトンネルが確立**
 - `https://myapp.example.com`で外部からアクセス可能
 - **SSL証明書はGatewayが自動取得（Let's Encrypt）**
 - リバースプロキシを別途置く必要なし
+- **Agentの設定ファイルやdocker-compose.ymlを変更せずに、複数のトンネルを追加できる**
 
 **メリット**:
-- docker-compose.ymlに数行追加するだけ
+- docker-compose.ymlに最小限の設定だけ（CONTROL_URLとAPI_KEYのみ）
+- ドメインやターゲットはWeb UIで柔軟に管理
+- 1つのAgentで複数のサービスを公開可能（Web UIで追加）
 - Nginx、Traefik、Caddyなどのリバースプロキシ不要
 - SSL証明書の設定・更新が完全自動
+- **CloudFlare Tunnelと同じ使い勝手**
 
 ---
 
@@ -273,14 +285,13 @@ CloudFlare Tunnelのようなリバースプロキシシステム。
 - [ ] サービス一覧表示
 - [ ] その他:
 
-#### 入口ノード管理（Gateway）
-- [ ] 入口ノードの登録
-- [ ] 入口ノードの削除
-- [ ] 入口ノードのステータス監視
-- [ ] 入口ノードの有効化・無効化
-- [ ] 入口ノード間の負荷分散設定
-- [ ] 入口ノードの動的追加（スケールアウト）
-- [ ] 入口ノードのヘルスチェック
+#### 入口ノード管理（Gateway - MVP必須）
+- [ ] **複数Gatewayの登録・管理（MVP必須）**
+- [ ] Gatewayの削除
+- [ ] **Gatewayのステータス監視（オンライン/オフライン）**
+- [ ] Gatewayの有効化・無効化
+- [ ] **Gatewayのヘルスチェック（自動）**
+- [ ] **トンネル作成時のGateway選択または自動割り当て**
 - [ ] **SSL証明書の自動取得（Let's Encrypt）**
 - [ ] **SSL証明書の自動更新**
 - [ ] **HTTPからHTTPSへの自動リダイレクト**
@@ -450,10 +461,11 @@ CloudFlare Tunnelのようなリバースプロキシシステム。
   - REST API
   - WebSocketサーバー
   - データベース（SQLite）
-- Gateway（入口ノード）
+- **Gateway（入口ノード - 複数配置可能）**
   - トンネル中継
   - SSL証明書自動取得（Let's Encrypt）
   - HTTPSリダイレクト
+  - ヘルスチェックエンドポイント
 - Agent（エッジクライアント）
   - トンネル確立
   - ローカルプロキシ
@@ -461,10 +473,11 @@ CloudFlare Tunnelのようなリバースプロキシシステム。
 **必須機能**:
 - ✅ **Dockerコンテナとしての配布（3コンポーネント全て）**
 - ✅ **Docker Composeサポート**
+- ✅ **複数Gateway対応（登録・管理・監視）**
+- ✅ **Gatewayのヘルスチェック・自動検出**
 - ✅ ユーザー認証（登録・ログイン）
 - ✅ トンネル管理（作成・削除・一覧・編集）
 - ✅ Agent管理（登録・認証・ステータス監視）
-- ✅ Gateway管理（登録・ステータス監視）
 - ✅ SSL証明書自動取得・更新
 - ✅ シンプルで使いやすいWebUI
 
