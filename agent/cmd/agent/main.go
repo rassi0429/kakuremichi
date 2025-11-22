@@ -10,6 +10,9 @@ import (
 	"syscall"
 
 	"github.com/yourorg/kakuremichi/agent/internal/config"
+	"github.com/yourorg/kakuremichi/agent/internal/proxy"
+	"github.com/yourorg/kakuremichi/agent/internal/wireguard"
+	"github.com/yourorg/kakuremichi/agent/internal/ws"
 )
 
 func main() {
@@ -37,6 +40,116 @@ func main() {
 	// Prevent "declared and not used" error
 	_ = ctx
 
+	// Generate WireGuard keys if not provided
+	if cfg.WireguardPrivateKey == "" {
+		privateKey, publicKey, err := wireguard.GenerateKeyPair()
+		if err != nil {
+			log.Fatalf("Failed to generate WireGuard keys: %v", err)
+		}
+		cfg.WireguardPrivateKey = privateKey
+		slog.Info("Generated WireGuard keys", "public_key", publicKey)
+	}
+
+	// WireGuard device will be initialized after receiving config from Control
+	var wgDevice *wireguard.Device
+
+	// Local proxy will be initialized after receiving virtual IP from Control
+	var localProxy *proxy.LocalProxy
+
+	// Initialize WebSocket client (Control connection)
+	wsClient := ws.NewClient(cfg)
+	wsClient.SetConfigUpdateCallback(func(config ws.AgentConfig) {
+		slog.Info("Received configuration update",
+			"gateways_count", len(config.Gateways),
+			"tunnels_count", len(config.Tunnels),
+			"virtual_ip", config.Agent.VirtualIP,
+			"subnet", config.Agent.Subnet,
+		)
+
+		// Initialize or update WireGuard device
+		if wgDevice == nil {
+			// First time initialization
+			var gateways []wireguard.GatewayPeer
+			for _, gw := range config.Gateways {
+				peer := wireguard.GatewayPeer{
+					PublicKey: gw.WireguardPublicKey,
+					Endpoint:  gw.PublicIP + ":51820", // TODO: Make port configurable
+					AllowedIP: "", // Will be set based on subnet
+				}
+				gateways = append(gateways, peer)
+			}
+
+			wgConfig := &wireguard.DeviceConfig{
+				PrivateKey: cfg.WireguardPrivateKey,
+				VirtualIP:  config.Agent.VirtualIP,
+				Subnet:     config.Agent.Subnet,
+				Gateways:   gateways,
+			}
+
+			device, err := wireguard.NewDevice(wgConfig)
+			if err != nil {
+				slog.Error("Failed to create WireGuard device", "error", err)
+			} else {
+				wgDevice = device
+				slog.Info("WireGuard device initialized", "public_key", wgDevice.PublicKey())
+			}
+		} else {
+			// Update existing device
+			var gateways []wireguard.GatewayPeer
+			for _, gw := range config.Gateways {
+				peer := wireguard.GatewayPeer{
+					PublicKey: gw.WireguardPublicKey,
+					Endpoint:  gw.PublicIP + ":51820",
+					AllowedIP: "",
+				}
+				gateways = append(gateways, peer)
+			}
+
+			if err := wgDevice.UpdateGateways(gateways); err != nil {
+				slog.Error("Failed to update WireGuard gateways", "error", err)
+			} else {
+				slog.Info("Updated WireGuard gateways", "count", len(gateways))
+			}
+		}
+
+		// Initialize or update local proxy
+		if localProxy == nil && config.Agent.VirtualIP != "" {
+			// First time initialization
+			proxyAddr := config.Agent.VirtualIP + ":80"
+			localProxy = proxy.NewLocalProxy(proxyAddr)
+
+			// Start proxy in background
+			go func() {
+				if err := localProxy.Start(ctx); err != nil {
+					slog.Error("Local proxy stopped", "error", err)
+				}
+			}()
+
+			slog.Info("Local proxy started", "addr", proxyAddr)
+		}
+
+		// Update tunnel mappings
+		if localProxy != nil {
+			var tunnels []proxy.TunnelMapping
+			for _, t := range config.Tunnels {
+				tunnel := proxy.TunnelMapping{
+					ID:      t.ID,
+					Domain:  t.Domain,
+					Target:  t.Target,
+					Enabled: t.Enabled,
+				}
+				tunnels = append(tunnels, tunnel)
+			}
+			localProxy.UpdateTunnels(tunnels)
+		}
+	})
+
+	// Connect to Control server
+	if err := wsClient.Connect(); err != nil {
+		log.Fatalf("Failed to connect to Control: %v", err)
+	}
+	defer wsClient.Close()
+
 	// TODO: Initialize WireGuard + netstack
 	// wg, err := wireguard.NewDevice(cfg)
 	// if err != nil {
@@ -49,13 +162,6 @@ func main() {
 	// if err != nil {
 	// 	log.Fatalf("Failed to create local proxy: %v", err)
 	// }
-
-	// TODO: Initialize WebSocket client (Control connection)
-	// wsClient, err := ws.NewClient(cfg)
-	// if err != nil {
-	// 	log.Fatalf("Failed to create WebSocket client: %v", err)
-	// }
-	// go wsClient.Connect(ctx)
 
 	// TODO: Initialize Docker integration (if enabled)
 	// if cfg.DockerEnabled {
@@ -77,9 +183,13 @@ func main() {
 	slog.Info("Shutting down Agent")
 	cancel()
 
-	// TODO: Graceful shutdown
-	// proxy.Shutdown()
-	// wg.Close()
+	// Graceful shutdown
+	if wgDevice != nil {
+		wgDevice.Close()
+	}
+	if localProxy != nil {
+		localProxy.Shutdown()
+	}
 
 	fmt.Println("Agent stopped")
 }

@@ -19,7 +19,16 @@
       "Bash(./agent.exe:*)",
       "Bash(npm run db:generate:*)",
       "Bash(npm run db:migrate:*)",
-      "Bash(timeout 10 npm run dev:*)"
+      "Bash(timeout 10 npm run dev:*)",
+      "Bash(go get:*)",
+      "Bash(npm run dev:ws:*)",
+      "Bash(npm install:*)",
+      "Bash(curl:*)",
+      "Bash(npm run dev:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(taskkill:*)",
+      "Bash(powershell -Command \"Stop-Process -Id 62224 -Force\")"
     ],
     "deny": [],
     "ask": []

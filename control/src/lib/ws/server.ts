@@ -153,8 +153,8 @@ export class ControlWebSocketServer {
 
       console.log(`${message.clientType} ${clientId} authenticated`);
 
-      // TODO: Send initial configuration
-      // await this.sendConfig(clientId);
+      // Send initial configuration
+      await this.sendConfigToClient(clientId);
     } catch (error) {
       console.error('Auth error:', error);
       this.send(ws, {

@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/yourorg/kakuremichi/gateway/internal/config"
+	"github.com/yourorg/kakuremichi/agent/internal/config"
 )
 
-// Client represents a WebSocket client for Gateway
+// Client represents a WebSocket client for Agent
 type Client struct {
 	cfg    *config.Config
 	conn   *websocket.Conn
@@ -23,7 +23,7 @@ type Client struct {
 	recv chan []byte
 
 	// Callbacks
-	onConfigUpdate func(config GatewayConfig)
+	onConfigUpdate func(config AgentConfig)
 }
 
 // NewClient creates a new WebSocket client
@@ -44,7 +44,7 @@ func (c *Client) Connect() error {
 	slog.Info("Connecting to Control server", "url", c.cfg.ControlURL)
 
 	conn, _, err := websocket.DefaultDialer.Dial(c.cfg.ControlURL, nil)
-	if (err != nil) {
+	if err != nil {
 		return fmt.Errorf("failed to connect: %w", err)
 	}
 
@@ -73,7 +73,7 @@ func (c *Client) authenticate() error {
 			Timestamp: time.Now().UnixMilli(),
 		},
 		APIKey:     c.cfg.APIKey,
-		ClientType: "gateway",
+		ClientType: "agent",
 		// TODO: Send WireGuard public key if available
 	}
 
@@ -276,7 +276,7 @@ func (c *Client) heartbeat() {
 }
 
 // SetConfigUpdateCallback sets the callback for configuration updates
-func (c *Client) SetConfigUpdateCallback(callback func(GatewayConfig)) {
+func (c *Client) SetConfigUpdateCallback(callback func(AgentConfig)) {
 	c.onConfigUpdate = callback
 }
 
