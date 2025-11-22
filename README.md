@@ -118,13 +118,15 @@ kakuremichi/
 
 ### In Progress
 - 🚧 WireGuard integration (Gateway & Agent)
-- 🚧 HTTP reverse proxy (Gateway)
 - 🚧 Local proxy (Agent)
 - 🚧 WebSocket communication (Control ⇔ Gateway/Agent)
 
+### Recently Completed
+- ✅ HTTP reverse proxy (Gateway)
+- ✅ Let's Encrypt SSL automation (ACME HTTP-01)
+
 ### Planned (Phase 2+)
 - ⏳ Web UI (Next.js frontend)
-- ⏳ Let's Encrypt SSL automation
 - ⏳ Kubernetes integration
 - ⏳ Multi-organization support
 
@@ -132,6 +134,7 @@ See [SUMMARY.md](SUMMARY.md) for detailed roadmap.
 
 ## Documentation
 
+- [Deployment Guide](DEPLOYMENT.md) - Production deployment and SSL setup
 - [Requirements](requirements.md) - MVP requirements and use cases
 - [Architecture](claude.md) - System architecture and WireGuard design
 - [Data Model](data-model.md) - Database schema
@@ -188,4 +191,4 @@ MIT License - see [LICENSE](LICENSE) for details.
 ---
 
 **Project Created:** 2025-11-22
-**Last Updated:** 2025-11-22
+**Last Updated:** 2025-11-22 (ACME/SSL automation implemented)
