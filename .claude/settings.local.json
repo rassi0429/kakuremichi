@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__github__get_file_contents",
+      "WebSearch",
+      "WebFetch(domain:docs.pangolin.net)",
+      "mcp__github__search_repositories",
+      "WebFetch(domain:cons.io)",
+      "mcp__github__search_code",
+      "Bash(whereis go:*)",
+      "Bash(command -v:*)",
+      "Bash(chmod:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
