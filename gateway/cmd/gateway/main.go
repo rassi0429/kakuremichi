@@ -208,6 +208,9 @@ func ensureGatewayIPs(iface string, agents []struct {
 	Subnet             string `json:"subnet"`
 	VirtualIP          string `json:"virtualIp"`
 }) {
+	// Bring interface up (ignore errors)
+	_ = exec.Command("ip", "link", "set", iface, "up").Run()
+
 	seen := make(map[string]struct{})
 	for _, ag := range agents {
 		_, ipnet, err := net.ParseCIDR(ag.Subnet)
@@ -234,6 +237,16 @@ func ensureGatewayIPs(iface string, agents []struct {
 			}
 		} else {
 			slog.Info("Added IP to WireGuard interface", "addr", addr, "iface", iface)
+		}
+
+		// Ensure route to agent subnet via wg interface
+		routeCmd := exec.Command("ip", "route", "add", ipnet.String(), "dev", iface)
+		if out, err := routeCmd.CombinedOutput(); err != nil {
+			if !strings.Contains(string(out), "File exists") && !strings.Contains(err.Error(), "File exists") {
+				slog.Warn("Failed to add route for agent subnet", "subnet", ipnet.String(), "iface", iface, "error", err, "out", string(out))
+			}
+		} else {
+			slog.Info("Added route for agent subnet", "subnet", ipnet.String(), "iface", iface)
 		}
 	}
 }

@@ -127,6 +127,12 @@ func (d *Device) configureDevice() error {
 
 		// Persistent keepalive
 		config += "persistent_keepalive_interval=25\n"
+
+		slog.Info("Configured gateway peer",
+			"endpoint", gw.Endpoint,
+			"gateway_virtual_ip", gatewayIP,
+			"public_key", gw.PublicKey,
+		)
 	}
 
 	// Apply configuration via IPC
