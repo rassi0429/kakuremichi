@@ -441,10 +441,14 @@ CloudFlare Tunnelのようなリバースプロキシシステム。
 - Go 1.23+
 
 **主要機能**:
-- HTTP/HTTPSサーバー
+- HTTP/HTTPSサーバー（ポート443）
+- **WireGuardサーバー（ポート51820/udp）**
 - トンネル中継
 - SSL証明書管理（Let's Encrypt / ACME protocol）
 - ヘルスチェックエンドポイント
+
+**WireGuard実装**:
+- ネイティブLinux WireGuardまたはwireguard-go
 
 ### 5.3 Agent（エッジクライアント）
 
@@ -452,9 +456,16 @@ CloudFlare Tunnelのようなリバースプロキシシステム。
 - Go 1.23+
 
 **主要機能**:
-- WebSocketクライアント
+- WebSocketクライアント（Controlとの通信）
+- **WireGuardクライアント（Gatewayとのトンネル）**
 - TCP/UDPプロキシ
 - ローカルサービスへの接続
+
+**WireGuard実装**:
+- wireguard-go + netstack（ユーザースペース、ポート開放不要）
+- **1つのWireGuardインターフェースで複数Gatewayに接続**
+- 仮想IPアドレス: 10.0.0.100/24（同一ネットワークに全Gatewayが参加）
+- **AllowedIPsで通信相手を制限**（Agent ⇔ Gateway のみ、Agent間は不可）
 
 ### 5.4 実行環境
 

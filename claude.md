@@ -105,23 +105,101 @@ Pangolinを参考にしながら、独自のトンネル型リバースプロキ
 - 負荷分散とDDoS対策
 - 高可用性
 
-## 検討事項
+## 技術選択
 
-### 1. トンネル技術の選択
+### 1. トンネル技術: WireGuard
 
-**WireGuard**
-- 利点: 高速、セキュア、モダン
-- 欠点: カーネルモジュール必要（ユーザースペース実装もあるが）
+**採用理由**:
+- 高速、セキュア、モダン
+- カーネルレベルの実装で低レイテンシ
+- NAT traversal対応
+- 実績あり（Pangolinでも採用）
 
-**SSH Tunneling**
-- 利点: 既存技術、導入が簡単
-- 欠点: パフォーマンス、スケーラビリティ
+**実装方針**:
+- **Gateway**: WireGuardサーバー（ポート51820/udp）
+  - ネイティブLinux WireGuardまたはwireguard-go
+  - 仮想IP: 10.0.0.1, 10.0.0.2, 10.0.0.3, ...
+- **Agent**: WireGuardクライアント（ユーザースペース）
+  - wireguard-go + netstack
+  - **1つのWireGuardインターフェースで複数Gatewayに接続**
+  - 仮想IP: 10.0.0.100/24
+  - **ポート開放不要**（アウトバウンド接続のみ）
 
-**カスタムプロトコル（WebSocket + TLS）**
-- 利点: 柔軟、ファイアウォールフレンドリー
-- 欠点: セキュリティリスク、パフォーマンス
+**WireGuard仮想ネットワーク**:
+```
+10.0.0.0/24
+  ├─ 10.0.0.1 (Gateway1)
+  ├─ 10.0.0.2 (Gateway2)
+  ├─ 10.0.0.3 (Gateway3)
+  ├─ 10.0.0.100 (Agent A)
+  └─ 10.0.0.101 (Agent B)
+```
 
-**→ 検討結果: ?**
+**Agent側のWireGuard設定例**:
+```ini
+[Interface]
+PrivateKey = <AgentのPrivateKey>
+Address = 10.0.0.100/24
+
+[Peer]  # Gateway1
+PublicKey = <Gateway1のPublicKey>
+Endpoint = 1.2.3.4:51820
+AllowedIPs = 10.0.0.1/32  # Gateway1のみ許可
+PersistentKeepalive = 25
+
+[Peer]  # Gateway2
+PublicKey = <Gateway2のPublicKey>
+Endpoint = 5.6.7.8:51820
+AllowedIPs = 10.0.0.2/32  # Gateway2のみ許可
+PersistentKeepalive = 25
+
+[Peer]  # Gateway3
+PublicKey = <Gateway3のPublicKey>
+Endpoint = 9.10.11.12:51820
+AllowedIPs = 10.0.0.3/32  # Gateway3のみ許可
+PersistentKeepalive = 25
+```
+
+**Gateway側のWireGuard設定例**:
+```ini
+[Interface]
+PrivateKey = <Gateway1のPrivateKey>
+Address = 10.0.0.1/24
+ListenPort = 51820
+
+[Peer]  # Agent A
+PublicKey = <AgentAのPublicKey>
+AllowedIPs = 10.0.0.100/32  # このAgentのみ許可
+
+[Peer]  # Agent B
+PublicKey = <AgentBのPublicKey>
+AllowedIPs = 10.0.0.101/32  # このAgentのみ許可
+```
+
+**セキュリティ**:
+- `AllowedIPs`で通信相手を厳密に制限
+- Agent間の直接通信は不可能
+- Agent ⇔ Gateway のみ通信可能
+```
+
+**DNSラウンドロビン対応**:
+```
+example.com のAレコード:
+  - 1.2.3.4 (Gateway1)
+  - 5.6.7.8 (Gateway2)
+  - 9.10.11.12 (Gateway3)
+
+外部ユーザー
+  ↓ DNS round robin → どれかのGateway
+  ↓ HTTPS:443
+Gateway（どれでもOK、SSL終端）
+  ↓ WireGuardトンネル経由
+  → 10.0.0.100 (Agent仮想IP)
+  ↓
+Agent
+  ↓ ローカルプロキシ
+プライベートアプリ
+```
 
 ### 2. 認証・認可の設計
 

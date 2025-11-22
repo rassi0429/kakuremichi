@@ -9,7 +9,8 @@
       "mcp__github__search_code",
       "Bash(whereis go:*)",
       "Bash(command -v:*)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "WebFetch(domain:mintcdn.com)"
     ],
     "deny": [],
     "ask": []
