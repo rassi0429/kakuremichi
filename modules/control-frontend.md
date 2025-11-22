@@ -13,25 +13,27 @@ ControlサーバーのWeb UI実装。Next.js App Router + Reactを使用。
 ```
 control/src/app/
 ├── layout.tsx                    # ルートレイアウト
-├── page.tsx                      # / (ダッシュボード)
+├── page.tsx                      # / (ダッシュボード) - 認証必須
+├── login/
+│   └── page.tsx                  # /login (ログインページ) - 認証不要
 ├── agents/
-│   ├── page.tsx                  # /agents (Agent一覧)
+│   ├── page.tsx                  # /agents (Agent一覧) - 認証必須
 │   ├── new/
-│   │   └── page.tsx              # /agents/new (Agent追加)
+│   │   └── page.tsx              # /agents/new (Agent追加) - 認証必須
 │   └── [id]/
-│       └── page.tsx              # /agents/:id (Agent詳細)
+│       └── page.tsx              # /agents/:id (Agent詳細) - 認証必須
 ├── gateways/
-│   ├── page.tsx                  # /gateways (Gateway一覧)
+│   ├── page.tsx                  # /gateways (Gateway一覧) - 認証必須
 │   ├── new/
-│   │   └── page.tsx              # /gateways/new (Gateway追加)
+│   │   └── page.tsx              # /gateways/new (Gateway追加) - 認証必須
 │   └── [id]/
-│       └── page.tsx              # /gateways/:id (Gateway詳細)
+│       └── page.tsx              # /gateways/:id (Gateway詳細) - 認証必須
 └── tunnels/
-    ├── page.tsx                  # /tunnels (Tunnel一覧)
+    ├── page.tsx                  # /tunnels (Tunnel一覧) - 認証必須
     ├── new/
-    │   └── page.tsx              # /tunnels/new (Tunnel追加)
+    │   └── page.tsx              # /tunnels/new (Tunnel追加) - 認証必須
     └── [id]/
-        └── page.tsx              # /tunnels/:id (Tunnel詳細・編集)
+        └── page.tsx              # /tunnels/:id (Tunnel詳細・編集) - 認証必須
 ```
 
 ---
@@ -107,6 +109,153 @@ export default function RootLayout({
     </html>
   );
 }
+```
+
+---
+
+## ログインページ
+
+**ファイル**: `control/src/app/login/page.tsx`
+
+```typescript
+'use client';
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+
+export default function LoginPage() {
+  const router = useRouter();
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+
+      if (response.ok) {
+        router.push('/');
+        router.refresh();
+      } else {
+        const data = await response.json();
+        setError(data.error?.message || 'ログインに失敗しました');
+      }
+    } catch (err) {
+      setError('ネットワークエラーが発生しました');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-100">
+      <Card className="w-full max-w-md p-8">
+        <h1 className="text-2xl font-bold mb-6 text-center">kakuremichi</h1>
+        <h2 className="text-lg text-gray-600 mb-6 text-center">管理者ログイン</h2>
+
+        <form onSubmit={handleSubmit}>
+          <div className="mb-4">
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+              パスワード
+            </label>
+            <input
+              type="password"
+              id="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+              autoFocus
+            />
+          </div>
+
+          {error && (
+            <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+              {error}
+            </div>
+          )}
+
+          <Button
+            type="submit"
+            disabled={loading}
+            className="w-full"
+          >
+            {loading ? 'ログイン中...' : 'ログイン'}
+          </Button>
+        </form>
+
+        <div className="mt-6 text-sm text-gray-600 text-center">
+          <p>環境変数 ADMIN_PASSWORD でパスワードを設定してください</p>
+        </div>
+      </Card>
+    </div>
+  );
+}
+```
+
+**注意**: このページはルートレイアウトを使用しない独立したレイアウトです。
+
+---
+
+## 認証ミドルウェア（クライアントサイド）
+
+**ファイル**: `control/src/middleware.ts`
+
+```typescript
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { getIronSession } from 'iron-session';
+import { cookies } from 'next/headers';
+import { SessionData } from '@/lib/auth/session';
+
+const publicPaths = ['/login', '/api/auth/login'];
+
+export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  // 公開パスはスキップ
+  if (publicPaths.some(path => pathname.startsWith(path))) {
+    return NextResponse.next();
+  }
+
+  // インストールスクリプトはスキップ
+  if (pathname.startsWith('/api/install/')) {
+    return NextResponse.next();
+  }
+
+  try {
+    const session = await getIronSession<SessionData>(cookies(), {
+      password: process.env.SESSION_SECRET!,
+      cookieName: 'kakuremichi-session',
+    });
+
+    if (!session.authenticated) {
+      // 未認証の場合はログインページへリダイレクト
+      const loginUrl = new URL('/login', request.url);
+      return NextResponse.redirect(loginUrl);
+    }
+
+    return NextResponse.next();
+  } catch (error) {
+    console.error('Middleware error:', error);
+    const loginUrl = new URL('/login', request.url);
+    return NextResponse.redirect(loginUrl);
+  }
+}
+
+export const config = {
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+};
 ```
 
 ---

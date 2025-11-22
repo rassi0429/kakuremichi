@@ -39,6 +39,7 @@ Controlサーバーで管理するデータベーススキーマを定義しま�
 | name | String | ✓ | Agent名（ユーザーが設定、例: "home-server"） |
 | api_key | String | ✓ | 認証用APIキー（Control接続時に使用） |
 | wireguard_public_key | String | ✓ | WireGuard公開鍵 |
+| wireguard_private_key | String | ✓ | WireGuard秘密鍵（**MVP: 平文保存、Phase 2: 暗号化**） |
 | virtual_ip | String | ✓ | WireGuard仮想IP（例: "10.1.0.100"） |
 | subnet | String | ✓ | Agent専用サブネット（例: "10.1.0.0/24"） |
 | status | Enum | ✓ | ステータス（online, offline, error） |
@@ -72,6 +73,7 @@ Controlサーバーで管理するデータベーススキーマを定義しま�
 | api_key | String | ✓ | 認証用APIキー（Control接続時に使用） |
 | public_ip | String | ✓ | グローバルIP（例: "1.2.3.4"） |
 | wireguard_public_key | String | ✓ | WireGuard公開鍵 |
+| wireguard_private_key | String | ✓ | WireGuard秘密鍵（**MVP: 平文保存、Phase 2: 暗号化**） |
 | region | String | - | リージョン（例: "tokyo", "singapore"） |
 | status | Enum | ✓ | ステータス（online, offline, error） |
 | last_seen_at | DateTime | - | 最終接続日時 |
@@ -184,6 +186,7 @@ export const agents = pgTable('agents', {
   name: varchar('name', { length: 64 }).notNull(),
   apiKey: varchar('api_key', { length: 64 }).notNull().unique(),
   wireguardPublicKey: varchar('wireguard_public_key', { length: 256 }).notNull().unique(),
+  wireguardPrivateKey: varchar('wireguard_private_key', { length: 256 }).notNull(),
   virtualIp: varchar('virtual_ip', { length: 15 }).notNull().unique(),
   subnet: varchar('subnet', { length: 18 }).notNull().unique(),
   status: varchar('status', { length: 16 }).notNull().default('offline'),
@@ -197,8 +200,10 @@ export const agents = pgTable('agents', {
 export const gateways = pgTable('gateways', {
   id: uuid('id').defaultRandom().primaryKey(),
   name: varchar('name', { length: 64 }).notNull(),
+  apiKey: varchar('api_key', { length: 64 }).notNull().unique(),
   publicIp: varchar('public_ip', { length: 15 }).notNull().unique(),
   wireguardPublicKey: varchar('wireguard_public_key', { length: 256 }).notNull().unique(),
+  wireguardPrivateKey: varchar('wireguard_private_key', { length: 256 }).notNull(),
   region: varchar('region', { length: 32 }),
   status: varchar('status', { length: 16 }).notNull().default('offline'),
   lastSeenAt: timestamp('last_seen_at'),
@@ -433,6 +438,102 @@ if (nextNumber > 254) {
 const subnet = `10.${nextNumber}.0.0/24`;
 const virtualIp = `10.${nextNumber}.0.100`;
 ```
+
+---
+
+## セキュリティ考慮事項
+
+### 秘密鍵の取り扱い
+
+#### MVP（Phase 1）
+
+**保存方法**:
+- WireGuard秘密鍵（`wireguard_private_key`）をSQLiteに**平文保存**
+- SSL証明書秘密鍵（`certificates.private_key`）をSQLiteに**平文保存**
+- 環境: 単一サーバーでControl、DB、WebUIが稼働
+
+**リスク**:
+- データベースファイルへのアクセスがあれば秘密鍵が漏洩
+- MVP環境（個人利用、信頼できるネットワーク内）では許容
+
+**対策**:
+- データベースファイル権限を`600`（所有者のみ読み書き）に制限
+- Controlサーバーへのアクセス制限（ファイアウォール、VPN）
+- バックアップファイルの暗号化
+
+**WebSocket配信**:
+- **初回接続時のみ**秘密鍵を配信:
+  - Agent: `wireguardPrivateKey`を含む設定を送信
+  - Gateway: `wireguardPrivateKey`と`certificates[].privateKey`を送信
+- **再接続時は配信しない**:
+  - Agent/Gatewayはローカルに秘密鍵を保存（`/etc/kakuremichi/{agent,gateway}.conf`）
+  - 再接続時は公開鍵とメタデータのみ送信
+
+#### Phase 2以降
+
+**暗号化保存**:
+- **at-rest暗号化**: SQLiteファイル全体を暗号化（SQLCipher）
+- **カラムレベル暗号化**: AES-256で秘密鍵を暗号化して保存
+  ```typescript
+  import crypto from 'crypto';
+
+  const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY!; // 32 bytes
+
+  function encrypt(plaintext: string): string {
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY, 'hex'), iv);
+    let encrypted = cipher.update(plaintext, 'utf8', 'base64');
+    encrypted += cipher.final('base64');
+    return `${iv.toString('hex')}:${encrypted}`;
+  }
+
+  function decrypt(ciphertext: string): string {
+    const [ivHex, encrypted] = ciphertext.split(':');
+    const iv = Buffer.from(ivHex, 'hex');
+    const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY, 'hex'), iv);
+    let decrypted = decipher.update(encrypted, 'base64', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+  }
+  ```
+
+**鍵ローテーション**:
+- WireGuard秘密鍵の定期的な再生成（30日ごと）
+- SSL証明書の自動更新（Let's Encrypt: 90日ごと）
+
+**HSM統合**:
+- エンタープライズ環境では HSM（Hardware Security Module）に秘密鍵を保存
+- AWS KMS、Azure Key Vault、Google Cloud KMS統合
+
+**監査ログ**:
+- 秘密鍵へのアクセスをログ記録
+- 異常なアクセスパターンの検出
+
+#### Agent/Gatewayローカル保存
+
+**保存場所**:
+- Agent: `/etc/kakuremichi/agent.conf`
+- Gateway: `/etc/kakuremichi/gateway.conf`
+
+**権限**:
+```bash
+chmod 600 /etc/kakuremichi/{agent,gateway}.conf
+chown root:root /etc/kakuremichi/{agent,gateway}.conf
+```
+
+**設定ファイル形式**:
+```yaml
+# /etc/kakuremichi/agent.conf
+control_url: https://control.example.com
+api_key: agt_xxx
+wireguard_private_key: base64-encoded-key
+virtual_ip: 10.1.0.100
+```
+
+**セキュリティ**:
+- ファイルは所有者（root）のみ読み取り可能
+- systemdサービスはroot権限で実行
+- Docker環境ではsecretマウントを使用
 
 ---
 

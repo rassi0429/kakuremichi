@@ -25,19 +25,29 @@
 ### バリデーション
 - **Zod**: スキーマバリデーション、型推論
 
-### 認証（MVP後）
-**候補**:
-- [ ] `next-auth` / `auth.js`
-- [ ] カスタム実装（JWT）
+### 認証
+- **iron-session**: 暗号化Session Cookie管理 ✓
+  - MVP: 管理者パスワード認証
+  - CSRF対策（Same-Site Cookie）
+  - Phase 2: OAuth/OIDC統合候補
+    - `next-auth` / `auth.js`
+
+### WireGuard鍵生成
+- **@noble/curves**: Curve25519暗号化ライブラリ ✓
+  - WireGuard鍵ペア生成
+  - Pure JavaScript実装（外部依存なし）
+  - wireguard-tools不要
 
 ### その他
 - **日時**: `date-fns`
-- **UUID**: `uuid`
+- **UUID**: `uuid`（またはnode:crypto.randomUUID）
 - **暗号化**: `node:crypto`（標準ライブラリ）
 
 ---
 
 ## Gateway（Go）
+
+**ランタイム**: Go 1.23+
 
 ### WireGuard
 - **golang.zx2c4.com/wireguard**
@@ -71,13 +81,15 @@
   - シンプルで十分
 
 ### ログ
-- **log/slog**（標準ライブラリ、Go 1.21+）✓
+- **log/slog**（標準ライブラリ、Go 1.21+で導入）✓
   - 構造化ログ
   - 十分高機能
 
 ---
 
 ## Agent（Go）
+
+**ランタイム**: Go 1.23+
 
 ### WireGuard
 - **golang.zx2c4.com/wireguard**

@@ -20,17 +20,93 @@ https://control.example.com/api
 
 ### 認証
 
-**MVP**: 認証なし（Phase 2で実装）
+**MVP（Phase 1）**:
+- **管理者パスワード認証**: 環境変数`ADMIN_PASSWORD`で設定
+- **Session Cookie**: `iron-session`を使用した暗号化Cookie
+- **CSRF対策**: Next.jsのデフォルト機能（Same-Site Cookie）
 
-**将来**:
-- Cookie認証（next-auth）
-- Bearer Token（API Key）
+**認証フロー**:
+1. POST /api/auth/login でパスワード送信
+2. Session Cookieを発行
+3. 以降のAPI呼び出しで自動的に認証
+
+**Phase 2以降**:
+- OAuth/OIDC統合（Google, GitHub等）
+- ユーザー管理（複数管理者、RBAC）
+- API Token認証（プログラマティックアクセス）
 
 ---
 
 ## エンドポイント一覧
 
+### 認証
+
+#### `POST /api/auth/login`
+
+管理者ログイン
+
+**リクエスト**:
+```json
+{
+  "password": "your-admin-password"
+}
+```
+
+**レスポンス**:
+```json
+{
+  "success": true,
+  "message": "Logged in successfully"
+}
+```
+
+**ステータスコード**:
+- `200`: ログイン成功（Session Cookie発行）
+- `401`: パスワード不正
+- `400`: バリデーションエラー
+
+**注意**: レスポンスにSession Cookieが`Set-Cookie`ヘッダーで設定されます。
+
+---
+
+#### `POST /api/auth/logout`
+
+ログアウト
+
+**レスポンス**:
+```json
+{
+  "success": true,
+  "message": "Logged out successfully"
+}
+```
+
+**ステータスコード**:
+- `200`: ログアウト成功
+
+---
+
+#### `GET /api/auth/me`
+
+現在の認証状態を確認
+
+**レスポンス**:
+```json
+{
+  "authenticated": true,
+  "role": "admin"
+}
+```
+
+**ステータスコード**:
+- `200`: 認証済み
+- `401`: 未認証
+
+---
+
 ### Agent管理
+
+**注意**: 以下のすべてのエンドポイントは認証必須です。
 
 #### `POST /api/agents`
 

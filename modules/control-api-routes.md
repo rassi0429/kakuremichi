@@ -12,25 +12,239 @@ ControlサーバーのREST API実装。Next.js App Router（Route Handlers）を
 
 ```
 control/src/app/api/
+├── auth/
+│   ├── login/
+│   │   └── route.ts          # POST /api/auth/login
+│   ├── logout/
+│   │   └── route.ts          # POST /api/auth/logout
+│   └── me/
+│       └── route.ts          # GET /api/auth/me
 ├── agents/
-│   ├── route.ts              # GET /api/agents, POST /api/agents
+│   ├── route.ts              # GET /api/agents, POST /api/agents (認証必須)
 │   └── [id]/
-│       ├── route.ts          # GET /api/agents/:id, PATCH /api/agents/:id, DELETE /api/agents/:id
+│       ├── route.ts          # GET /api/agents/:id, PATCH /api/agents/:id, DELETE /api/agents/:id (認証必須)
 │       └── tunnels/
-│           └── route.ts      # GET /api/agents/:id/tunnels
+│           └── route.ts      # GET /api/agents/:id/tunnels (認証必須)
 ├── gateways/
-│   ├── route.ts              # GET /api/gateways, POST /api/gateways
+│   ├── route.ts              # GET /api/gateways, POST /api/gateways (認証必須)
 │   └── [id]/
-│       └── route.ts          # GET /api/gateways/:id, DELETE /api/gateways/:id
+│       └── route.ts          # GET /api/gateways/:id, DELETE /api/gateways/:id (認証必須)
 ├── tunnels/
-│   ├── route.ts              # GET /api/tunnels, POST /api/tunnels
+│   ├── route.ts              # GET /api/tunnels, POST /api/tunnels (認証必須)
 │   └── [id]/
-│       └── route.ts          # GET /api/tunnels/:id, PATCH /api/tunnels/:id, DELETE /api/tunnels/:id
+│       └── route.ts          # GET /api/tunnels/:id, PATCH /api/tunnels/:id, DELETE /api/tunnels/:id (認証必須)
 └── install/
     ├── agent.sh/
-    │   └── route.ts          # GET /api/install/agent.sh
+    │   └── route.ts          # GET /api/install/agent.sh (認証不要 - スクリプトダウンロード)
     └── gateway.sh/
-        └── route.ts          # GET /api/install/gateway.sh
+        └── route.ts          # GET /api/install/gateway.sh (認証不要 - スクリプトダウンロード)
+```
+
+---
+
+## 認証ミドルウェア
+
+すべての管理APIは認証が必須です（install/配下を除く）。
+
+### Session管理
+
+**ファイル**: `control/src/lib/auth/session.ts`
+
+```typescript
+import { getIronSession, IronSession } from 'iron-session';
+import { cookies } from 'next/headers';
+
+export interface SessionData {
+  authenticated: boolean;
+  role: 'admin';
+}
+
+const sessionOptions = {
+  password: process.env.SESSION_SECRET!,
+  cookieName: 'kakuremichi-session',
+  cookieOptions: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    sameSite: 'lax' as const,
+    maxAge: 60 * 60 * 24 * 7, // 7 days
+  },
+};
+
+export async function getSession(): Promise<IronSession<SessionData>> {
+  return getIronSession<SessionData>(cookies(), sessionOptions);
+}
+
+export async function requireAuth(): Promise<void> {
+  const session = await getSession();
+  if (!session.authenticated) {
+    throw new Error('UNAUTHORIZED');
+  }
+}
+```
+
+---
+
+### 認証チェックヘルパー
+
+**ファイル**: `control/src/lib/auth/middleware.ts`
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth } from './session';
+
+export async function withAuth(
+  handler: (request: NextRequest, ...args: any[]) => Promise<NextResponse>
+) {
+  return async (request: NextRequest, ...args: any[]) => {
+    try {
+      await requireAuth();
+      return handler(request, ...args);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'UNAUTHORIZED') {
+        return NextResponse.json(
+          { error: { code: 'UNAUTHORIZED', message: 'Authentication required' } },
+          { status: 401 }
+        );
+      }
+      throw error;
+    }
+  };
+}
+```
+
+---
+
+## 認証 API
+
+### POST /api/auth/login
+
+管理者ログイン
+
+**ファイル**: `control/src/app/api/auth/login/route.ts`
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { getSession } from '@/lib/auth/session';
+
+const loginSchema = z.object({
+  password: z.string().min(1),
+});
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { password } = loginSchema.parse(body);
+
+    const adminPassword = process.env.ADMIN_PASSWORD;
+    if (!adminPassword) {
+      console.error('ADMIN_PASSWORD not set');
+      return NextResponse.json(
+        { error: { code: 'CONFIG_ERROR', message: 'Server misconfigured' } },
+        { status: 500 }
+      );
+    }
+
+    if (password !== adminPassword) {
+      return NextResponse.json(
+        { error: { code: 'INVALID_CREDENTIALS', message: 'Invalid password' } },
+        { status: 401 }
+      );
+    }
+
+    // Session作成
+    const session = await getSession();
+    session.authenticated = true;
+    session.role = 'admin';
+    await session.save();
+
+    return NextResponse.json({
+      success: true,
+      message: 'Logged in successfully',
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: { code: 'VALIDATION_ERROR', message: 'Invalid request', details: error.errors } },
+        { status: 400 }
+      );
+    }
+
+    console.error('Login error:', error);
+    return NextResponse.json(
+      { error: { code: 'INTERNAL_ERROR', message: 'Login failed' } },
+      { status: 500 }
+    );
+  }
+}
+```
+
+---
+
+### POST /api/auth/logout
+
+ログアウト
+
+**ファイル**: `control/src/app/api/auth/logout/route.ts`
+
+```typescript
+import { NextResponse } from 'next/server';
+import { getSession } from '@/lib/auth/session';
+
+export async function POST() {
+  try {
+    const session = await getSession();
+    session.destroy();
+
+    return NextResponse.json({
+      success: true,
+      message: 'Logged out successfully',
+    });
+  } catch (error) {
+    console.error('Logout error:', error);
+    return NextResponse.json(
+      { error: { code: 'INTERNAL_ERROR', message: 'Logout failed' } },
+      { status: 500 }
+    );
+  }
+}
+```
+
+---
+
+### GET /api/auth/me
+
+現在の認証状態確認
+
+**ファイル**: `control/src/app/api/auth/me/route.ts`
+
+```typescript
+import { NextResponse } from 'next/server';
+import { getSession } from '@/lib/auth/session';
+
+export async function GET() {
+  try {
+    const session = await getSession();
+
+    if (!session.authenticated) {
+      return NextResponse.json(
+        { authenticated: false },
+        { status: 401 }
+      );
+    }
+
+    return NextResponse.json({
+      authenticated: true,
+      role: session.role,
+    });
+  } catch (error) {
+    console.error('Auth check error:', error);
+    return NextResponse.json(
+      { error: { code: 'INTERNAL_ERROR', message: 'Auth check failed' } },
+      { status: 500 }
+    );
+  }
+}
 ```
 
 ---
@@ -49,6 +263,7 @@ import { z } from 'zod';
 import { createAgent, getNextAvailableSubnet } from '@/lib/db/queries/agents';
 import { generateWireGuardKeyPair } from '@/lib/wireguard/keygen';
 import { generateApiKey } from '@/lib/utils/api-key';
+import { requireAuth } from '@/lib/auth/session';
 
 // バリデーションスキーマ
 const createAgentSchema = z.object({
@@ -57,6 +272,9 @@ const createAgentSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    // 認証チェック
+    await requireAuth();
+
     // リクエストボディをパース
     const body = await request.json();
     const { name } = createAgentSchema.parse(body);
@@ -94,6 +312,14 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
+    // 認証エラー
+    if (error instanceof Error && error.message === 'UNAUTHORIZED') {
+      return NextResponse.json(
+        { error: { code: 'UNAUTHORIZED', message: 'Authentication required' } },
+        { status: 401 }
+      );
+    }
+
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         {
@@ -122,6 +348,9 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
+    // 認証チェック
+    await requireAuth();
+
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
 
@@ -132,6 +361,14 @@ export async function GET(request: NextRequest) {
       total: agents.length,
     });
   } catch (error) {
+    // 認証エラー
+    if (error instanceof Error && error.message === 'UNAUTHORIZED') {
+      return NextResponse.json(
+        { error: { code: 'UNAUTHORIZED', message: 'Authentication required' } },
+        { status: 401 }
+      );
+    }
+
     console.error('Failed to get agents:', error);
     return NextResponse.json(
       {
@@ -482,6 +719,82 @@ export async function DELETE(
 
 **ファイル**: `control/src/lib/wireguard/keygen.ts`
 
+**方針1: Pure JavaScriptライブラリ使用（推奨）**
+
+```typescript
+import crypto from 'crypto';
+
+/**
+ * Curve25519鍵ペアを生成
+ * WireGuardはCurve25519を使用
+ */
+export function generateWireGuardKeyPair(): {
+  publicKey: string;
+  privateKey: string;
+} {
+  // 秘密鍵生成（32 bytes random）
+  const privateKeyBytes = crypto.randomBytes(32);
+
+  // Curve25519 clamping（WireGuard仕様）
+  privateKeyBytes[0] &= 248;
+  privateKeyBytes[31] &= 127;
+  privateKeyBytes[31] |= 64;
+
+  // Base64エンコード
+  const privateKey = privateKeyBytes.toString('base64');
+
+  // 公開鍵生成（Curve25519）
+  // Node.js組み込みのcrypto.diffieHellmanを使用
+  const ecdh = crypto.createECDH('prime256v1');
+  ecdh.setPrivateKey(privateKeyBytes);
+  const publicKeyBytes = ecdh.getPublicKey();
+
+  // 注: より正確な実装には @noble/curves を推奨
+  // import { x25519 } from '@noble/curves/ed25519';
+  // const publicKeyBytes = x25519.getPublicKey(privateKeyBytes);
+
+  const publicKey = publicKeyBytes.toString('base64');
+
+  return { publicKey, privateKey };
+}
+```
+
+**依存パッケージ**:
+```bash
+npm install @noble/curves
+```
+
+**推奨実装（@noble/curves使用）**:
+```typescript
+import crypto from 'crypto';
+import { x25519 } from '@noble/curves/ed25519';
+
+export function generateWireGuardKeyPair(): {
+  publicKey: string;
+  privateKey: string;
+} {
+  // 秘密鍵生成（32 bytes random）
+  const privateKeyBytes = crypto.randomBytes(32);
+
+  // Curve25519 clamping
+  privateKeyBytes[0] &= 248;
+  privateKeyBytes[31] &= 127;
+  privateKeyBytes[31] |= 64;
+
+  // 公開鍵生成
+  const publicKeyBytes = x25519.getPublicKey(privateKeyBytes);
+
+  return {
+    privateKey: Buffer.from(privateKeyBytes).toString('base64'),
+    publicKey: Buffer.from(publicKeyBytes).toString('base64'),
+  };
+}
+```
+
+---
+
+**方針2: wireguard-toolsへの外部依存（非推奨）**
+
 ```typescript
 import { execSync } from 'child_process';
 
@@ -489,20 +802,37 @@ export function generateWireGuardKeyPair(): {
   publicKey: string;
   privateKey: string;
 } {
-  // wg genkey | tee privatekey | wg pubkey
-  const privateKey = execSync('wg genkey')
-    .toString()
-    .trim();
-
-  const publicKey = execSync(`echo "${privateKey}" | wg pubkey`)
-    .toString()
-    .trim();
-
-  return { publicKey, privateKey };
+  try {
+    const privateKey = execSync('wg genkey').toString().trim();
+    const publicKey = execSync(`echo "${privateKey}" | wg pubkey`).toString().trim();
+    return { publicKey, privateKey };
+  } catch (error) {
+    throw new Error(
+      'wireguard-tools not found. Install with: apt-get install wireguard-tools'
+    );
+  }
 }
 ```
 
-**注**: 本番環境では、ライブラリ（例: `wireguard-tools` npmパッケージ）を使用することを推奨。
+**Dockerfile対応**:
+```dockerfile
+FROM node:22-alpine
+
+# wireguard-toolsインストール
+RUN apk add --no-cache wireguard-tools
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY . .
+
+CMD ["npm", "start"]
+```
+
+**注意**:
+- 方針1（Pure JavaScript）を推奨
+- 外部依存がなく、ビルド環境に依存しない
+- Dockerコンテナサイズも削減
 
 ---
 

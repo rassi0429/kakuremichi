@@ -497,5 +497,90 @@ describe('WSServer', () => {
 
 ---
 
+## セキュリティ考慮事項
+
+### 秘密鍵の配信方針
+
+#### MVP（Phase 1）
+
+**初回接続時のみ配信**:
+- Agent/Gatewayの初回接続時に`wireguardPrivateKey`を含む設定を送信
+- 受信したAgent/Gatewayはローカルに秘密鍵を保存（`/etc/kakuremichi/{agent,gateway}.conf`）
+
+**再接続時は配信しない**:
+- Agent/Gatewayが再起動・再接続した場合、ローカルに保存された秘密鍵を使用
+- `sendConfig`では秘密鍵を含めない
+
+**実装方針**:
+```typescript
+// 初回接続フラグをDBに追加する場合
+export const agents = sqliteTable('agents', {
+  // ...
+  hasConfigured: integer('has_configured', { mode: 'boolean' }).notNull().default(false),
+});
+
+private async sendConfig(client: Client): Promise<void> {
+  if (client.type === 'agent') {
+    const agent = await db.query.agents.findFirst({
+      where: eq(agents.id, client.id),
+    });
+
+    this.send(client, {
+      type: 'config',
+      data: {
+        agent: {
+          id: agent.id,
+          name: agent.name,
+          virtualIp: agent.virtualIp,
+          subnet: agent.subnet,
+          // 初回のみ秘密鍵を送信
+          ...(agent.hasConfigured ? {} : { wireguardPrivateKey: agent.wireguardPrivateKey }),
+        },
+        gateways: gatewayList.map(gw => ({
+          id: gw.id,
+          name: gw.name,
+          publicIp: gw.publicIp,
+          wireguardPublicKey: gw.wireguardPublicKey,
+          virtualIps: this.getGatewayVirtualIps(gw.id),
+        })),
+        tunnels: tunnelList.map(t => ({ ... })),
+      },
+    });
+
+    // 初回設定完了フラグを更新
+    if (!agent.hasConfigured) {
+      await db.update(agents)
+        .set({ hasConfigured: true })
+        .where(eq(agents.id, agent.id));
+    }
+  } else {
+    // Gatewayも同様
+  }
+}
+```
+
+**MVP簡易版**:
+- 初回フラグなしで、**毎回秘密鍵を送信**
+- リスク: WebSocket通信の盗聴があれば秘密鍵漏洩
+- 対策: TLS（WSS）必須、信頼できるネットワーク内で運用
+
+#### Phase 2以降
+
+**WebSocket接続のTLS必須化**:
+- `wss://`（WebSocket over TLS）を強制
+- 自己署名証明書の警告を無視しない
+
+**秘密鍵の初回配信後の削除**:
+- Agent/Gatewayが初回設定完了を報告
+- Controlは配信済みフラグを記録
+- 以降の接続では秘密鍵を送信しない
+
+**鍵ローテーション**:
+- 定期的にWireGuard鍵ペアを再生成
+- 新しい秘密鍵を一度だけ配信
+- 古い鍵を無効化
+
+---
+
 **作成日**: 2025-11-22
 **最終更新**: 2025-11-22
