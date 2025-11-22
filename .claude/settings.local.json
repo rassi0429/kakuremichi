@@ -29,7 +29,13 @@
       "Bash(findstr:*)",
       "Bash(taskkill:*)",
       "Bash(powershell -Command \"Stop-Process -Id 62224 -Force\")",
-      "Bash(powershell -Command \"Stop-Process -Id 58976 -Force\")"
+      "Bash(powershell -Command \"Stop-Process -Id 58976 -Force\")",
+      "Bash(npx tsx:*)",
+      "Bash(nul)",
+      "Bash(timeout /t 2 /nobreak)",
+      "Bash(powershell -Command:*)",
+      "Bash(docker-compose:*)",
+      "Bash(timeout /t 10 /nobreak)"
     ],
     "deny": [],
     "ask": []

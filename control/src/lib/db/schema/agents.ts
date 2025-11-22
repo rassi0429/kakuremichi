@@ -6,6 +6,7 @@ export const agents = sqliteTable('agents', {
   name: text('name', { length: 64 }).notNull(),
   apiKey: text('api_key', { length: 64 }).notNull().unique(),
   wireguardPublicKey: text('wireguard_public_key', { length: 256 }).notNull().unique(),
+  wireguardPrivateKey: text('wireguard_private_key', { length: 256 }),
   virtualIp: text('virtual_ip', { length: 15 }).notNull().unique(),
   subnet: text('subnet', { length: 18 }).notNull().unique(),
   status: text('status', { length: 16 }).notNull().default('offline'),

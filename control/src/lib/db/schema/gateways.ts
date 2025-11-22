@@ -6,6 +6,7 @@ export const gateways = sqliteTable('gateways', {
   apiKey: text('api_key', { length: 64 }).notNull().unique(),
   publicIp: text('public_ip', { length: 15 }).notNull().unique(),
   wireguardPublicKey: text('wireguard_public_key', { length: 256 }).notNull().unique(),
+  wireguardPrivateKey: text('wireguard_private_key', { length: 256 }),
   region: text('region', { length: 32 }),
   status: text('status', { length: 16 }).notNull().default('offline'),
   lastSeenAt: integer('last_seen_at', { mode: 'timestamp' }),

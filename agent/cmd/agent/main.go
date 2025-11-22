@@ -73,14 +73,14 @@ func main() {
 			for _, gw := range config.Gateways {
 				peer := wireguard.GatewayPeer{
 					PublicKey: gw.WireguardPublicKey,
-					Endpoint:  gw.PublicIP + ":51820", // TODO: Make port configurable
+					Endpoint:  gw.Endpoint,
 					AllowedIP: "", // Will be set based on subnet
 				}
 				gateways = append(gateways, peer)
 			}
 
 			wgConfig := &wireguard.DeviceConfig{
-				PrivateKey: cfg.WireguardPrivateKey,
+				PrivateKey: config.Agent.WireguardPrivateKey,
 				VirtualIP:  config.Agent.VirtualIP,
 				Subnet:     config.Agent.Subnet,
 				Gateways:   gateways,
@@ -99,7 +99,7 @@ func main() {
 			for _, gw := range config.Gateways {
 				peer := wireguard.GatewayPeer{
 					PublicKey: gw.WireguardPublicKey,
-					Endpoint:  gw.PublicIP + ":51820",
+					Endpoint:  gw.Endpoint,
 					AllowedIP: "",
 				}
 				gateways = append(gateways, peer)

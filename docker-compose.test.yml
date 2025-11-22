@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  control:
+    build:
+      context: ./control
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./control/data:/app/data
+    environment:
+      - NODE_ENV=development
+    command: npm run dev:ws
+    networks:
+      - kakuremichi-test
+
+  agent:
+    build:
+      context: ./agent
+      dockerfile: Dockerfile.dev
+    depends_on:
+      - control
+    restart: unless-stopped
+    environment:
+      - CONTROL_URL=ws://control:3001
+      - API_KEY=agt_zvrTEGj0L2k6ko00SEN2oSLE43IhA4kr
+    networks:
+      - kakuremichi-test
+    command: /app/agent --control-url=ws://control:3001 --api-key=agt_zvrTEGj0L2k6ko00SEN2oSLE43IhA4kr
+
+  # gateway:
+  #   build:
+  #     context: ./gateway
+  #     dockerfile: Dockerfile.dev
+  #   depends_on:
+  #     - control
+  #   ports:
+  #     - "51820:51820/udp"
+  #   environment:
+  #     - CONTROL_URL=ws://control:3001
+  #     - API_KEY=gtw_3dqFcpCEfOI5gM7hPLMdNFx2wNj5qvWd
+  #   networks:
+  #     - kakuremichi-test
+  #   command: /app/gateway --control-url=ws://control:3001 --api-key=gtw_3dqFcpCEfOI5gM7hPLMdNFx2wNj5qvWd
+
+networks:
+  kakuremichi-test:
+    driver: bridge

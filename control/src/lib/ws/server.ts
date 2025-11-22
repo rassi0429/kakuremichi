@@ -365,12 +365,13 @@ export class ControlWebSocketServer {
     // Get all gateways
     const allGateways = await db.select().from(gateways);
 
-    // Build gateway list
+    // Build gateway list with endpoint
     const gatewayList = allGateways.map((gw) => ({
       id: gw.id,
       name: gw.name,
-      publicIP: gw.publicIP,
+      publicIp: gw.publicIP,
       wireguardPublicKey: gw.wireguardPublicKey,
+      endpoint: `${gw.publicIP}:51820`,
     }));
 
     // Get tunnels for this agent
@@ -390,9 +391,10 @@ export class ControlWebSocketServer {
       agent: {
         id: agentData.id,
         name: agentData.name,
-        virtualIP: agentData.virtualIP,
+        virtualIp: agentData.virtualIP,
         subnet: agentData.subnet,
         wireguardPublicKey: agentData.wireguardPublicKey,
+        wireguardPrivateKey: agentData.wireguardPrivateKey,
       },
       gateways: gatewayList,
       tunnels: tunnelList,

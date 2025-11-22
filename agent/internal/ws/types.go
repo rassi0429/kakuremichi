@@ -90,18 +90,20 @@ type ErrorMessage struct {
 // AgentConfig represents Agent configuration from Control
 type AgentConfig struct {
 	Agent struct {
-		ID                 string `json:"id"`
-		Name               string `json:"name"`
-		WireguardPublicKey string `json:"wireguardPublicKey"`
-		VirtualIP          string `json:"virtualIp"`
-		Subnet             string `json:"subnet"`
-		Status             string `json:"status"`
+		ID                  string `json:"id"`
+		Name                string `json:"name"`
+		WireguardPublicKey  string `json:"wireguardPublicKey"`
+		WireguardPrivateKey string `json:"wireguardPrivateKey"`
+		VirtualIP           string `json:"virtualIp"`
+		Subnet              string `json:"subnet"`
+		Status              string `json:"status,omitempty"`
 	} `json:"agent"`
 	Gateways []struct {
 		ID                 string `json:"id"`
 		Name               string `json:"name"`
 		WireguardPublicKey string `json:"wireguardPublicKey"`
 		PublicIP           string `json:"publicIp"`
+		Endpoint           string `json:"endpoint"`
 	} `json:"gateways"`
 	Tunnels []struct {
 		ID      string `json:"id"`

@@ -1,0 +1,22 @@
+FROM node:22-alpine
+
+# Install build dependencies for better-sqlite3
+RUN apk add --no-cache python3 make g++
+
+WORKDIR /app
+
+# Install dependencies
+COPY package*.json ./
+RUN npm install
+
+# Copy source code (excluding node_modules)
+COPY tsconfig.json ./
+COPY drizzle.config.ts ./
+COPY src ./src
+
+# Generate Drizzle types
+RUN npm run db:generate
+
+EXPOSE 3001
+
+CMD ["npm", "run", "dev:ws"]
