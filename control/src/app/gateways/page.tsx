@@ -19,6 +19,8 @@ export default function GatewaysPage() {
   const [error, setError] = useState('')
   const [showNewForm, setShowNewForm] = useState(false)
   const [newGatewayName, setNewGatewayName] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState({ publicIp: '' })
 
   useEffect(() => {
     fetchGateways()
@@ -75,6 +77,34 @@ export default function GatewaysPage() {
     }
   }
 
+  function startEdit(gateway: Gateway) {
+    setEditingId(gateway.id)
+    setEditForm({ publicIp: gateway.publicIp || '' })
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+    setEditForm({ publicIp: '' })
+  }
+
+  async function saveEdit(id: string) {
+    try {
+      const res = await fetch(`/api/gateways/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ publicIp: editForm.publicIp || null }),
+      })
+
+      if (!res.ok) throw new Error('Failed to update gateway')
+
+      setEditingId(null)
+      setEditForm({ publicIp: '' })
+      fetchGateways()
+    } catch (err) {
+      alert('Failed to update gateway')
+    }
+  }
+
   if (loading) return <div className="loading">Loading...</div>
   if (error) return <div className="error">{error}</div>
 
@@ -128,7 +158,19 @@ export default function GatewaysPage() {
                       {gateway.status}
                     </span>
                   </td>
-                  <td><code>{gateway.publicIp || '-'}</code></td>
+                  <td>
+                    {editingId === gateway.id ? (
+                      <input
+                        type="text"
+                        value={editForm.publicIp}
+                        onChange={(e) => setEditForm({ publicIp: e.target.value })}
+                        placeholder="1.2.3.4"
+                        style={{ width: '120px', fontSize: '0.875rem' }}
+                      />
+                    ) : (
+                      <code>{gateway.publicIp || '-'}</code>
+                    )}
+                  </td>
                   <td>
                     <code style={{ fontSize: '0.75rem' }}>
                       {gateway.apiKey.substring(0, 20)}...
@@ -140,12 +182,32 @@ export default function GatewaysPage() {
                       : 'Never'}
                   </td>
                   <td>
-                    <button
-                      className="danger"
-                      onClick={() => deleteGateway(gateway.id)}
-                    >
-                      Delete
-                    </button>
+                    {editingId === gateway.id ? (
+                      <>
+                        <button
+                          onClick={() => saveEdit(gateway.id)}
+                          style={{ marginRight: '0.5rem' }}
+                        >
+                          Save
+                        </button>
+                        <button onClick={cancelEdit}>Cancel</button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => startEdit(gateway)}
+                          style={{ marginRight: '0.5rem' }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="danger"
+                          onClick={() => deleteGateway(gateway.id)}
+                        >
+                          Delete
+                        </button>
+                      </>
+                    )}
                   </td>
                 </tr>
               ))}

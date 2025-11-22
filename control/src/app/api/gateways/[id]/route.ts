@@ -60,7 +60,7 @@ export async function DELETE(
 }
 
 /**
- * PATCH /api/gateways/:id - Update gateway status
+ * PATCH /api/gateways/:id - Update gateway
  */
 export async function PATCH(
   request: NextRequest,
@@ -69,13 +69,14 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { status, lastSeenAt } = body;
+    const { status, lastSeenAt, publicIp } = body;
 
     const updated = await db
       .update(gateways)
       .set({
         ...(status && { status }),
         ...(lastSeenAt && { lastSeenAt: new Date(lastSeenAt) }),
+        ...(publicIp !== undefined && { publicIp }),
         updatedAt: new Date(),
       })
       .where(eq(gateways.id, id))
