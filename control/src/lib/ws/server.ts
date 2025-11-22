@@ -1,5 +1,5 @@
 import { WebSocketServer, WebSocket } from 'ws';
-import { db, agents, gateways } from '../db';
+import { db, agents, gateways, tunnels } from '../db';
 import { eq } from 'drizzle-orm';
 import type {
   WSMessage,
@@ -289,7 +289,121 @@ export class ControlWebSocketServer {
       return;
     }
 
-    // TODO: Generate and send configuration
     console.log(`Sending config to ${clientId}`);
+
+    try {
+      if (client.type === 'gateway') {
+        await this.sendGatewayConfig(clientId, client.ws);
+      } else if (client.type === 'agent') {
+        await this.sendAgentConfig(clientId, client.ws);
+      }
+    } catch (error) {
+      console.error(`Failed to send config to ${clientId}:`, error);
+    }
+  }
+
+  /**
+   * Send configuration to a Gateway
+   */
+  private async sendGatewayConfig(gatewayId: string, ws: WebSocket) {
+    // Get all agents
+    const allAgents = await db.select().from(agents);
+
+    // Get all tunnels
+    const allTunnels = await db.select().from(tunnels);
+
+    // Build agent list with WireGuard info
+    const agentList = allAgents.map((agent) => ({
+      id: agent.id,
+      name: agent.name,
+      wireguardPublicKey: agent.wireguardPublicKey,
+      subnet: agent.subnet,
+      virtualIP: agent.virtualIP,
+    }));
+
+    // Build tunnel list with agent info
+    const tunnelList = allTunnels.map((tunnel) => ({
+      id: tunnel.id,
+      domain: tunnel.domain,
+      agentId: tunnel.agentId,
+      target: tunnel.target,
+      enabled: tunnel.enabled,
+    }));
+
+    const config = {
+      agents: agentList,
+      tunnels: tunnelList,
+    };
+
+    this.send(ws, {
+      type: 'config_update' as MessageType.CONFIG_UPDATE,
+      timestamp: Date.now(),
+      config,
+    });
+
+    console.log(`Sent Gateway config to ${gatewayId}`);
+  }
+
+  /**
+   * Send configuration to an Agent
+   */
+  private async sendAgentConfig(agentId: string, ws: WebSocket) {
+    // Get agent info
+    const agent = await db
+      .select()
+      .from(agents)
+      .where(eq(agents.id, agentId))
+      .limit(1);
+
+    if (agent.length === 0) {
+      console.error(`Agent ${agentId} not found in database`);
+      return;
+    }
+
+    const agentData = agent[0];
+
+    // Get all gateways
+    const allGateways = await db.select().from(gateways);
+
+    // Build gateway list
+    const gatewayList = allGateways.map((gw) => ({
+      id: gw.id,
+      name: gw.name,
+      publicIP: gw.publicIP,
+      wireguardPublicKey: gw.wireguardPublicKey,
+    }));
+
+    // Get tunnels for this agent
+    const agentTunnels = await db
+      .select()
+      .from(tunnels)
+      .where(eq(tunnels.agentId, agentId));
+
+    const tunnelList = agentTunnels.map((tunnel) => ({
+      id: tunnel.id,
+      domain: tunnel.domain,
+      target: tunnel.target,
+      enabled: tunnel.enabled,
+    }));
+
+    const config = {
+      agent: {
+        id: agentData.id,
+        name: agentData.name,
+        virtualIP: agentData.virtualIP,
+        subnet: agentData.subnet,
+        wireguardPublicKey: agentData.wireguardPublicKey,
+      },
+      gateways: gatewayList,
+      tunnels: tunnelList,
+    };
+
+    this.send(ws, {
+      type: 'config_update' as MessageType.CONFIG_UPDATE,
+      timestamp: Date.now(),
+      config,
+    });
+
+    console.log(`Sent Agent config to ${agentId}`, config);
   }
 }

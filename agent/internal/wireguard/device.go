@@ -78,12 +78,24 @@ func NewDevice(config *DeviceConfig) (*Device, error) {
 
 // configureDevice configures the WireGuard device with initial settings
 func (d *Device) configureDevice() error {
-	// Build IPC configuration string
-	config := fmt.Sprintf("private_key=%s\n", d.privateKey)
+	// Parse the base64 private key and convert to hex for IPC
+	privateKey, err := wgtypes.ParseKey(d.privateKey)
+	if err != nil {
+		return fmt.Errorf("failed to parse private key: %w", err)
+	}
+
+	// Build IPC configuration string with hex-encoded key
+	config := fmt.Sprintf("private_key=%x\n", privateKey[:])
 
 	// Add peers (Gateways)
 	for _, gw := range d.config.Gateways {
-		config += fmt.Sprintf("public_key=%s\n", gw.PublicKey)
+		// Parse the base64 public key and convert to hex for IPC
+		pubKey, err := wgtypes.ParseKey(gw.PublicKey)
+		if err != nil {
+			return fmt.Errorf("failed to parse gateway public key: %w", err)
+		}
+
+		config += fmt.Sprintf("public_key=%x\n", pubKey[:])
 		if gw.Endpoint != "" {
 			config += fmt.Sprintf("endpoint=%s\n", gw.Endpoint)
 		}

@@ -28,7 +28,8 @@
       "Bash(netstat:*)",
       "Bash(findstr:*)",
       "Bash(taskkill:*)",
-      "Bash(powershell -Command \"Stop-Process -Id 62224 -Force\")"
+      "Bash(powershell -Command \"Stop-Process -Id 62224 -Force\")",
+      "Bash(powershell -Command \"Stop-Process -Id 58976 -Force\")"
     ],
     "deny": [],
     "ask": []
