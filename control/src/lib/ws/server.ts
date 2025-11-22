@@ -120,12 +120,24 @@ export class ControlWebSocketServer {
 
         clientId = agent[0].id;
 
-        // Update last seen
+        // Calculate virtualIp from subnet (always .100 in the agent's subnet)
+        // Example: "10.1.0.0/24" -> "10.1.0.100"
+        let virtualIp: string | null = null;
+        if (agent[0].subnet) {
+          const subnetMatch = agent[0].subnet.match(/^(\d+\.\d+\.\d+)\.\d+\/\d+$/);
+          if (subnetMatch) {
+            virtualIp = `${subnetMatch[1]}.100`;
+          }
+        }
+
+        // Update agent with publicKey and calculated virtualIp
         await db
           .update(agents)
           .set({
             status: 'online',
             lastSeenAt: new Date(),
+            wireguardPublicKey: message.publicKey,
+            virtualIp: virtualIp,
           })
           .where(eq(agents.id, clientId));
       }
@@ -318,7 +330,7 @@ export class ControlWebSocketServer {
       name: agent.name,
       wireguardPublicKey: agent.wireguardPublicKey,
       subnet: agent.subnet,
-      virtualIP: agent.virtualIP,
+      virtualIP: agent.virtualIp,  // Fixed: use virtualIp not virtualIP
     }));
 
     // Build tunnel list with agent info
@@ -369,9 +381,9 @@ export class ControlWebSocketServer {
     const gatewayList = allGateways.map((gw) => ({
       id: gw.id,
       name: gw.name,
-      publicIp: gw.publicIP,
+      publicIp: gw.publicIp,  // Fixed: use publicIp not publicIP
       wireguardPublicKey: gw.wireguardPublicKey,
-      endpoint: `${gw.publicIP}:51820`,
+      endpoint: `${gw.publicIp}:51820`,  // Fixed: use publicIp not publicIP
     }));
 
     // Get tunnels for this agent
@@ -391,10 +403,9 @@ export class ControlWebSocketServer {
       agent: {
         id: agentData.id,
         name: agentData.name,
-        virtualIp: agentData.virtualIP,
+        virtualIp: agentData.virtualIp,  // Fixed: use virtualIp not virtualIP
         subnet: agentData.subnet,
         wireguardPublicKey: agentData.wireguardPublicKey,
-        wireguardPrivateKey: agentData.wireguardPrivateKey,
       },
       gateways: gatewayList,
       tunnels: tunnelList,

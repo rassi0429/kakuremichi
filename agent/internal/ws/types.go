@@ -35,7 +35,8 @@ type AuthMessage struct {
 	BaseMessage
 	APIKey     string `json:"apiKey"`
 	ClientType string `json:"clientType"` // "agent"
-	PublicKey  string `json:"publicKey,omitempty"`
+	PublicKey  string `json:"publicKey,omitempty"` // WireGuard public key generated locally
+	// Note: virtualIp is calculated by Control server from subnet, not sent by Agent
 }
 
 // AuthSuccessMessage is received upon successful authentication

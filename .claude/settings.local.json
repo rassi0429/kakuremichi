@@ -35,7 +35,8 @@
       "Bash(timeout /t 2 /nobreak)",
       "Bash(powershell -Command:*)",
       "Bash(docker-compose:*)",
-      "Bash(timeout /t 10 /nobreak)"
+      "Bash(timeout /t 10 /nobreak)",
+      "Bash(sqlite3:*)"
     ],
     "deny": [],
     "ask": []

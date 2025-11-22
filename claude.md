@@ -235,20 +235,28 @@ Agent A
 
 どのGatewayに接続しても、すべてのGatewayが同じAgent（10.1.0.100）に到達できるため、透過的に動作します。
 
-### 2. 認証・認可の設計
+### 2. 認証・認可・鍵管理の設計
 
-**認証方法の候補**:
-- パスワード認証（基本）
-- APIキー
-- OAuth/OIDC（エンタープライズ向け）
-- WebAuthn（将来）
+**✅ 採用済み: APIキー認証 + ゼロトラストWireGuard鍵管理**
 
-**認可モデルの候補**:
-- シンプルなACL（ユーザー ⇔ サービスのマッピング）
-- RBAC（ロールベース）
-- ABAC（属性ベース、コンテキスト認識）
+**鍵管理方針（セキュリティ重視）**:
+```
+Agent/Gateway起動フロー:
+1. 起動時に自分でWireGuard key pairを生成
+2. private keyはメモリ内のみで保持（永続化しない）
+3. WebSocket認証時にpublic key + virtual IPをControlに送信
+4. Controlはpublic keyのみをDBに保存
 
-**→ 検討結果: ?**
+Control Server:
+- private keyは見ない・保存しない・送信しない
+- 各Agent/Gatewayのpublic keyのみ管理
+- 設定配信時は他のpublic keysのみ送信
+```
+
+**セキュリティ利点**:
+- Controlサーバーが侵害されても秘密鍵は漏洩しない
+- 各Agentのprivate keyは分散管理（ゼロトラスト）
+- 秘密鍵の一元管理リスクを排除
 
 ### 3. データフローの設計
 

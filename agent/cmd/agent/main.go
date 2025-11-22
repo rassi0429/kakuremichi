@@ -40,15 +40,12 @@ func main() {
 	// Prevent "declared and not used" error
 	_ = ctx
 
-	// Generate WireGuard keys if not provided
-	if cfg.WireguardPrivateKey == "" {
-		privateKey, publicKey, err := wireguard.GenerateKeyPair()
-		if err != nil {
-			log.Fatalf("Failed to generate WireGuard keys: %v", err)
-		}
-		cfg.WireguardPrivateKey = privateKey
-		slog.Info("Generated WireGuard keys", "public_key", publicKey)
+	// Generate WireGuard keys (always generate locally for security)
+	privateKey, publicKey, err := wireguard.GenerateKeyPair()
+	if err != nil {
+		log.Fatalf("Failed to generate WireGuard keys: %v", err)
 	}
+	slog.Info("Generated WireGuard keys", "public_key", publicKey)
 
 	// WireGuard device will be initialized after receiving config from Control
 	var wgDevice *wireguard.Device
@@ -57,7 +54,8 @@ func main() {
 	var localProxy *proxy.LocalProxy
 
 	// Initialize WebSocket client (Control connection)
-	wsClient := ws.NewClient(cfg)
+	// Pass public key and private key to the client
+	wsClient := ws.NewClient(cfg, publicKey, privateKey)
 	wsClient.SetConfigUpdateCallback(func(config ws.AgentConfig) {
 		slog.Info("Received configuration update",
 			"gateways_count", len(config.Gateways),
@@ -80,7 +78,7 @@ func main() {
 			}
 
 			wgConfig := &wireguard.DeviceConfig{
-				PrivateKey: config.Agent.WireguardPrivateKey,
+				PrivateKey: privateKey, // Use locally generated private key
 				VirtualIP:  config.Agent.VirtualIP,
 				Subnet:     config.Agent.Subnet,
 				Gateways:   gateways,
