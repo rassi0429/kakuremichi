@@ -1,7 +1,7 @@
 # kakuremichi - 実装状況レポート
 
-**更新日**: 2025-11-22
-**Phase**: 1 - 基本アーキテクチャ実装（進行中）
+**更新日**: 2025-11-22 20:57 JST
+**Phase**: 1 - 基本アーキテクチャ実装（ほぼ完了）
 
 ---
 
@@ -34,7 +34,10 @@
   - クライアント管理
   - 接続状態の追跡
 - ✅ メッセージプロトコル定義
-- ✅ 設定配信メカニズム（骨組み）
+- ✅ 設定配信メカニズム
+  - 認証成功後の自動設定送信
+  - Gateway/Agent別の設定生成
+  - `sendConfigToClient` メソッド実装
 
 ### ✅ Gateway (Go)
 
@@ -49,8 +52,25 @@
   - Control接続
   - 認証
   - メッセージ送受信
-  - ハートビート
+  - ハートビート（30秒間隔）
 - ✅ 設定受信コールバック
+- ✅ 動的設定更新（WireGuard peers, HTTP routes）
+
+#### WireGuard
+- ✅ WireGuardインターフェース管理（wgctrl）
+  - インターフェース作成・設定
+  - Peer追加・削除・更新
+  - AllowedIPs設定
+  - Persistent keepalive
+- ✅ 鍵生成（Ed25519）
+- ✅ 動的Peer更新（設定配信に応答）
+
+#### HTTPリバースプロキシ
+- ✅ ドメインベースルーティング
+- ✅ WireGuard経由でAgentにプロキシ
+- ✅ X-Forwarded-Host/Proto ヘッダー
+- ✅ 動的ルート更新
+- ⚠️ SSL/TLS終端（未実装、Phase 2）
 
 ### ✅ Agent (Go)
 
@@ -59,6 +79,33 @@
 - ✅ 設定管理（環境変数 + コマンドライン引数）
 - ✅ エントリーポイント（main.go）
 - ✅ ビルド成功確認（agent.exe）
+
+#### WebSocket
+- ✅ WebSocketクライアント実装
+  - Control接続
+  - 認証
+  - メッセージ送受信
+  - ハートビート（30秒間隔）
+- ✅ 設定受信コールバック
+- ✅ 動的設定更新（WireGuard gateways, tunnel mappings）
+
+#### WireGuard + netstack
+- ✅ wireguard-go + gvisor netstack統合
+  - ユーザースペースWireGuardデバイス
+  - netstackによるTUNインターフェース
+  - 複数Gateway同時接続対応
+  - ポート開放不要（アウトバウンドのみ）
+- ✅ 鍵生成（Ed25519）
+- ✅ IPC設定（private_key, peers, allowed_ips, keepalive）
+- ⚠️ 設定受信の確認が必要（動作未検証）
+
+#### ローカルプロキシ
+- ✅ HTTPリバースプロキシ実装
+- ✅ ドメインベースのトンネルマッピング
+- ✅ ローカルサービスへの転送（localhost:8080等）
+- ✅ X-Forwarded-Host/Proto ヘッダー
+- ✅ 動的トンネル更新
+- ⚠️ netstackとの統合確認が必要
 
 ### ✅ Docker
 
@@ -76,42 +123,46 @@
 
 ---
 
-## 🚧 実装中
+## 🚧 実装中・検証が必要
 
-### Agent WebSocketクライアント
-- Gatewayと同様のWebSocketクライアントが必要
-- 実装予定
+### 1. WebSocket設定配信の検証
+- ✅ Control → Gateway/Agent への設定送信（実装済み）
+- ⚠️ Agent側での設定受信確認が必要
+- ⚠️ WireGuardデバイス作成の確認が必要
+
+### 2. Gateway WireGuardインターフェース（Windows対応）
+- ⚠️ Windows環境では管理者権限が必要
+- ⚠️ 代替案: wireguard-goによるユーザースペース実装
+
+### 3. エンドツーエンドテスト
+- ⚠️ 外部ユーザー → Gateway → Agent → ローカルアプリの通信確認
+- ⚠️ WireGuardトンネルの確立確認
+- ⚠️ HTTPプロキシの動作確認
 
 ---
 
-## 📋 未実装（Phase 1で必要）
+## 📋 未実装（Phase 2以降）
 
 ### Gateway
 
-1. **WireGuardインターフェース管理**
-   - WireGuardインターフェースの作成・管理
-   - Peer（Agent）の追加・削除
-   - 設定の動的更新
-
-2. **HTTPリバースプロキシ**
+1. **SSL/TLS終端**
+   - Let's Encrypt統合
+   - 自動証明書取得・更新
    - HTTPS受信（ポート443）
-   - ドメインベースルーティング
-   - WireGuard経由でAgentにプロキシ
-   - Let's Encrypt統合（Phase 2）
+
+2. **負荷分散**
+   - 複数Gatewayへの分散
+   - DNSラウンドロビン
 
 ### Agent
 
-1. **WebSocketクライアント**
-   - Gatewayと同様の実装
+1. **Docker統合**
+   - コンテナ自動検出
+   - 動的トンネル作成
 
-2. **WireGuard + netstack**
-   - ユーザースペースWireGuardデバイス
-   - 複数Gateway同時接続
-   - ポート開放不要
-
-3. **ローカルプロキシ**
-   - WireGuardから受信したHTTPリクエストを
-ローカルアプリ（localhost:8080等）に転送
+2. **ヘルスチェック**
+   - ローカルサービスの死活監視
+   - 自動復旧
 
 ---
 
@@ -119,11 +170,11 @@
 
 ### ビルドステータス
 
-| コンポーネント | ビルド | 起動 | 機能テスト |
-|--------------|--------|------|-----------|
-| Control      | ✅ 成功 | ✅ 成功 | 🚧 一部 |
-| Gateway      | ✅ 成功 | ✅ 成功 | 🚧 一部 |
-| Agent        | ✅ 成功 | ✅ 成功 | ❌ 未実施 |
+| コンポーネント | ビルド | 起動 | WebSocket接続 | 設定受信 | データプレーン |
+|--------------|--------|------|-------------|---------|-------------|
+| Control      | ✅ 成功 | ✅ 成功 | ✅ Gateway/Agent | ✅ 送信確認 | N/A |
+| Gateway      | ✅ 成功 | ✅ 成功 | ✅ 認証成功 | ✅ 受信確認 | ⚠️ 未検証 |
+| Agent        | ✅ 成功 | ✅ 成功 | ✅ 認証成功 | ⚠️ 未確認 | ⚠️ 未検証 |
 
 ### 修正したビルドエラー
 
@@ -135,28 +186,29 @@
 
 ## 次のステップ（優先順位順）
 
-### 1. Agent WebSocketクライアント実装 (高)
-- `agent/internal/ws/` ディレクトリに実装
-- Gatewayのコードを参考に作成
+### 1. Agent設定受信のデバッグ (最優先)
+- WebSocketメッセージ受信の確認
+- ログレベルを上げてデバッグ
+- WireGuardデバイス作成の確認
 
-### 2. WebSocket統合テスト (高)
-- Control起動
-- Gateway/Agent起動
-- 接続・認証確認
-- 設定配信テスト
+### 2. エンドツーエンドテスト (高)
+- ローカルテストアプリ起動（例: nginx on localhost:8080）
+- Tunnel作成（Control API経由）
+- 外部からのアクセステスト
+- トラフィックフロー確認
 
-### 3. WireGuard統合 (中)
-- Gateway: WireGuardインターフェース管理
-- Agent: WireGuard + netstackデバイス
-- トンネル確立テスト
+### 3. Windows環境でのWireGuard対応 (中)
+- Gateway: wireguard-go移行の検討
+- または Linux環境でのテスト推奨
 
-### 4. プロキシ実装 (中)
-- Gateway: HTTPリバースプロキシ
-- Agent: ローカルプロキシ
-- End-to-Endトラフィックテスト
+### 4. エラーハンドリング強化 (中)
+- WebSocket自動再接続
+- WireGuard接続失敗時のリトライ
+- より詳細なエラーメッセージ
 
 ### 5. Web UI (低)
 - Agent/Gateway/Tunnelリスト画面
+- ステータスモニタリング
 - 管理画面の基本機能
 
 ---
@@ -223,31 +275,54 @@ go build -o agent.exe ./cmd/agent
 
 ## 既知の課題
 
-1. **WebSocket自動再接続**: 未実装
-   - Gateway/Agentが切断された場合の再接続ロジック
+1. **Agent設定受信が未確認** (Critical)
+   - Controlから設定は送信されている（ログ確認済み）
+   - Agent側で受信・処理されていない可能性
+   - デバッグが必要
 
-2. **エラーハンドリング**: 基本的なもののみ
-   - より詳細なエラーメッセージとリカバリー
+2. **Windows環境でのWireGuard** (High)
+   - Gatewayでカーネルレベル WireGuardインターフェース作成には管理者権限が必要
+   - Agent側はwireguard-go + netstackで動作するはず
 
-3. **ログ**: 構造化されているが最適化の余地あり
-   - ログレベルの設定
-   - ログローテーション
+3. **WebSocket自動再接続** (Medium)
+   - Gateway/Agentが切断された場合の再接続ロジック未実装
 
-4. **テスト**: ユニットテストが未実装
-   - Control: APIエンドポイントテスト
-   - Gateway/Agent: 各モジュールのテスト
+4. **エラーハンドリング** (Medium)
+   - 基本的なもののみ実装済み
+   - より詳細なエラーメッセージとリカバリーが必要
+
+5. **テスト** (Low)
+   - ユニットテストが未実装
+   - 統合テストが未実装
 
 ---
 
 ## コード統計
 
-- **TypeScript files**: 15個
-- **Go files**: 5個
+- **TypeScript files**: ~20個
+- **Go files**: ~18個
 - **設定ファイル**: 8個
-- **ドキュメント**: 20個以上
+- **ドキュメント**: 25個以上
 
-**総計**: Phase 1の約60%完了
+**総計**: Phase 1の約85%完了
 
 ---
 
-**次回更新**: Agent WebSocketクライアント実装後
+## Phase 1 実装完了率
+
+### コア機能
+- ✅ Control Server (100%)
+- ✅ WebSocket通信 (90% - 設定受信の確認待ち)
+- ✅ Gateway実装 (95% - Windows WireGuard対応待ち)
+- ✅ Agent実装 (90% - 設定受信・WireGuard動作確認待ち)
+
+### 残タスク
+- Agent設定受信のデバッグ
+- エンドツーエンド動作確認
+- Windows環境対応の完了
+
+**予想完了**: デバッグ完了後、Phase 1は実質完了
+
+---
+
+**次回更新**: エンドツーエンドテスト完了後
