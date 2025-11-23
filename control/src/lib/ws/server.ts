@@ -319,7 +319,34 @@ export class ControlWebSocketServer {
   /**
    * Send configuration to a Gateway
    */
-  private async sendGatewayConfig(gatewayId: string, ws: WebSocket) {
+  public async broadcastGatewayConfig(): Promise<void> {
+    console.log('Broadcasting Gateway config to all connected gateways');
+
+    for (const [clientId, client] of this.clients.entries()) {
+      if (client.type !== 'gateway' || !client.authenticated) continue;
+      try {
+        await this.sendGatewayConfig(clientId, client.ws);
+      } catch (error) {
+        console.error(`Failed to send Gateway config to ${clientId}:`, error);
+      }
+    }
+  }
+
+  public async broadcastAgentConfig(agentId: string): Promise<void> {
+    const client = this.clients.get(agentId);
+    if (!client || client.type !== 'agent' || !client.authenticated) {
+      console.log(`Agent ${agentId} not connected; skipping config push`);
+      return;
+    }
+
+    try {
+      await this.sendAgentConfig(agentId, client.ws);
+    } catch (error) {
+      console.error(`Failed to send Agent config to ${agentId}:`, error);
+    }
+  }
+
+  public async sendGatewayConfig(gatewayId: string, ws: WebSocket) {
     // Get all agents
     const allAgents = await db.select().from(agents);
 
@@ -361,7 +388,7 @@ export class ControlWebSocketServer {
   /**
    * Send configuration to an Agent
    */
-  private async sendAgentConfig(agentId: string, ws: WebSocket) {
+  public async sendAgentConfig(agentId: string, ws: WebSocket) {
     // Get agent info
     const agent = await db
       .select()

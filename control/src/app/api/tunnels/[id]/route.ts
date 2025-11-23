@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, tunnels } from '@/lib/db';
+import { wsServer } from '@/lib/ws';
 import { updateTunnelSchema } from '@/lib/utils/validation';
 import { eq } from 'drizzle-orm';
 
@@ -60,6 +61,14 @@ export async function PATCH(
       return NextResponse.json({ error: 'Tunnel not found' }, { status: 404 });
     }
 
+    // Broadcast updated configs
+    try {
+      await wsServer.broadcastGatewayConfig();
+      await wsServer.broadcastAgentConfig(updated[0].agentId);
+    } catch (err) {
+      console.error('Failed to broadcast tunnel update config:', err);
+    }
+
     return NextResponse.json(updated[0]);
   } catch (error) {
     console.error('Failed to update tunnel:', error);
@@ -94,6 +103,14 @@ export async function DELETE(
 
     if (deleted.length === 0) {
       return NextResponse.json({ error: 'Tunnel not found' }, { status: 404 });
+    }
+
+    // Broadcast updated configs
+    try {
+      await wsServer.broadcastGatewayConfig();
+      await wsServer.broadcastAgentConfig(deleted[0].agentId);
+    } catch (err) {
+      console.error('Failed to broadcast tunnel delete config:', err);
     }
 
     return NextResponse.json({ success: true });

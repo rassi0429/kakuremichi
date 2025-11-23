@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, agents } from '@/lib/db';
+import { wsServer } from '@/lib/ws';
 import { createAgentSchema } from '@/lib/utils/validation';
 import { generateAgentApiKey, getNextSubnet, getVirtualIpFromSubnet } from '@/lib/utils';
 import { eq } from 'drizzle-orm';
@@ -49,6 +50,13 @@ export async function POST(request: NextRequest) {
         status: 'offline',
       })
       .returning();
+
+    // Broadcast to all gateways so they learn about the new agent
+    try {
+      await wsServer.broadcastGatewayConfig();
+    } catch (err) {
+      console.error('Failed to broadcast agent creation config:', err);
+    }
 
     return NextResponse.json(newAgent[0], { status: 201 });
   } catch (error) {

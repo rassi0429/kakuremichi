@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, agents } from '@/lib/db';
+import { wsServer } from '@/lib/ws';
 import { eq } from 'drizzle-orm';
 
 /**
@@ -49,6 +50,13 @@ export async function DELETE(
       return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
     }
 
+    // Gateways need to drop this agent from their config
+    try {
+      await wsServer.broadcastGatewayConfig();
+    } catch (err) {
+      console.error('Failed to broadcast agent delete config:', err);
+    }
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Failed to delete agent:', error);
@@ -83,6 +91,13 @@ export async function PATCH(
 
     if (updated.length === 0) {
       return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
+    }
+
+    // Keep gateways up-to-date on agent status changes
+    try {
+      await wsServer.broadcastGatewayConfig();
+    } catch (err) {
+      console.error('Failed to broadcast agent update config:', err);
     }
 
     return NextResponse.json(updated[0]);
