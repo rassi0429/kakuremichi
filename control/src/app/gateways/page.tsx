@@ -173,7 +173,7 @@ export default function GatewaysPage() {
                   </td>
                   <td>
                     <code style={{ fontSize: '0.75rem' }}>
-                      {gateway.apiKey.substring(0, 20)}...
+                      {gateway.apiKey}
                     </code>
                   </td>
                   <td style={{ fontSize: '0.875rem', color: '#666' }}>

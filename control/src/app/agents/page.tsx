@@ -134,7 +134,7 @@ export default function AgentsPage() {
                   <td><code>{agent.subnet || '-'}</code></td>
                   <td>
                     <code style={{ fontSize: '0.75rem' }}>
-                      {agent.apiKey.substring(0, 20)}...
+                      {agent.apiKey}
                     </code>
                   </td>
                   <td style={{ fontSize: '0.875rem', color: '#666' }}>
