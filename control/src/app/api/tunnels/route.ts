@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, tunnels, agents } from '@/lib/db';
-import { wsServer } from '@/lib/ws';
+import { getWebSocketServer } from '@/lib/ws';
 import { createTunnelSchema } from '@/lib/utils/validation';
 import { eq } from 'drizzle-orm';
 
@@ -71,15 +71,20 @@ export async function POST(request: NextRequest) {
       })
       .returning();
 
+    const createdTunnel = newTunnel[0];
+
     // Push latest config to gateways and the target agent (if online)
     try {
+      const wsServer = getWebSocketServer();
       await wsServer.broadcastGatewayConfig();
-      await wsServer.broadcastAgentConfig(validatedData.agentId);
+      if (createdTunnel?.agentId) {
+        await wsServer.broadcastAgentConfig(createdTunnel.agentId);
+      }
     } catch (err) {
       console.error('Failed to broadcast tunnel creation config:', err);
     }
 
-    return NextResponse.json(newTunnel[0], { status: 201 });
+    return NextResponse.json(createdTunnel, { status: 201 });
   } catch (error) {
     console.error('Failed to create tunnel:', error);
 

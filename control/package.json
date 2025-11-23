@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "tsx src/server.ts",
     "dev:ws": "tsx src/lib/ws/index.ts",
     "build": "next build",
     "start": "tsx src/scripts/start-servers.ts",

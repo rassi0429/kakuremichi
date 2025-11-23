@@ -1,4 +1,5 @@
 import { WebSocketServer, WebSocket } from 'ws';
+import type { Server as HTTPServer } from 'http';
 import { db, agents, gateways, tunnels } from '../db';
 import { eq } from 'drizzle-orm';
 import type {
@@ -16,10 +17,21 @@ export class ControlWebSocketServer {
   private clients: Map<string, ConnectedClient> = new Map();
   private heartbeatInterval: NodeJS.Timeout | null = null;
 
-  constructor(port: number = 3001) {
-    this.wss = new WebSocketServer({ port });
+  constructor(
+    port: number = 3001,
+    server?: HTTPServer,
+    path: string = '/ws',
+  ) {
+    // If an existing HTTP server is provided, attach to it; otherwise, listen on the given port.
+    this.wss = server
+      ? new WebSocketServer({ server, path })
+      : new WebSocketServer({ port, path });
     this.setupServer();
-    console.log(`WebSocket server listening on port ${port}`);
+    if (server) {
+      console.log(`WebSocket server attached to existing server at path ${path}`);
+    } else {
+      console.log(`WebSocket server listening on port ${port}${path}`);
+    }
   }
 
   private setupServer() {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, agents } from '@/lib/db';
-import { wsServer } from '@/lib/ws';
+import { getWebSocketServer } from '@/lib/ws';
 import { eq } from 'drizzle-orm';
 
 /**
@@ -52,6 +52,7 @@ export async function DELETE(
 
     // Gateways need to drop this agent from their config
     try {
+      const wsServer = getWebSocketServer();
       await wsServer.broadcastGatewayConfig();
     } catch (err) {
       console.error('Failed to broadcast agent delete config:', err);
@@ -95,6 +96,7 @@ export async function PATCH(
 
     // Keep gateways up-to-date on agent status changes
     try {
+      const wsServer = getWebSocketServer();
       await wsServer.broadcastGatewayConfig();
     } catch (err) {
       console.error('Failed to broadcast agent update config:', err);

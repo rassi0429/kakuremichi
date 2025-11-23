@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, tunnels } from '@/lib/db';
-import { wsServer } from '@/lib/ws';
+import { getWebSocketServer } from '@/lib/ws';
 import { updateTunnelSchema } from '@/lib/utils/validation';
 import { eq } from 'drizzle-orm';
 
@@ -57,19 +57,24 @@ export async function PATCH(
       .where(eq(tunnels.id, id))
       .returning();
 
-    if (updated.length === 0) {
+    const updatedTunnel = updated[0];
+
+    if (!updatedTunnel) {
       return NextResponse.json({ error: 'Tunnel not found' }, { status: 404 });
     }
 
     // Broadcast updated configs
     try {
+      const wsServer = getWebSocketServer();
       await wsServer.broadcastGatewayConfig();
-      await wsServer.broadcastAgentConfig(updated[0].agentId);
+      if (updatedTunnel.agentId) {
+        await wsServer.broadcastAgentConfig(updatedTunnel.agentId);
+      }
     } catch (err) {
       console.error('Failed to broadcast tunnel update config:', err);
     }
 
-    return NextResponse.json(updated[0]);
+    return NextResponse.json(updatedTunnel);
   } catch (error) {
     console.error('Failed to update tunnel:', error);
 
@@ -101,14 +106,19 @@ export async function DELETE(
       .where(eq(tunnels.id, id))
       .returning();
 
-    if (deleted.length === 0) {
+    const deletedTunnel = deleted[0];
+
+    if (!deletedTunnel) {
       return NextResponse.json({ error: 'Tunnel not found' }, { status: 404 });
     }
 
     // Broadcast updated configs
     try {
+      const wsServer = getWebSocketServer();
       await wsServer.broadcastGatewayConfig();
-      await wsServer.broadcastAgentConfig(deleted[0].agentId);
+      if (deletedTunnel.agentId) {
+        await wsServer.broadcastAgentConfig(deletedTunnel.agentId);
+      }
     } catch (err) {
       console.error('Failed to broadcast tunnel delete config:', err);
     }
