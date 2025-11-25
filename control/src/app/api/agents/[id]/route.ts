@@ -55,6 +55,8 @@ export async function DELETE(
       const wsServer = getWebSocketServer();
       if (wsServer) {
         await wsServer.broadcastGatewayConfig();
+      } else {
+          console
       }
     } catch (err) {
       console.error('Failed to broadcast agent delete config:', err);

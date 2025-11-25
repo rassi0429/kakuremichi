@@ -37,7 +37,8 @@
       "Bash(docker-compose:*)",
       "Bash(timeout /t 10 /nobreak)",
       "Bash(sqlite3:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(timeout 15 npm run dev:*)"
     ],
     "deny": [],
     "ask": []

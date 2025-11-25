@@ -1,5 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
-import type { Server as HTTPServer } from 'http';
+import type { Server as HTTPServer, IncomingMessage } from 'http';
+import type { Duplex } from 'stream';
 import { db, agents, gateways, tunnels } from '../db';
 import { eq } from 'drizzle-orm';
 import type {
@@ -22,16 +23,24 @@ export class ControlWebSocketServer {
     server?: HTTPServer,
     path: string = '/ws',
   ) {
-    // If an existing HTTP server is provided, attach to it; otherwise, listen on the given port.
-    this.wss = server
-      ? new WebSocketServer({ server, path })
-      : new WebSocketServer({ port, path });
-    this.setupServer();
-    if (server) {
-      console.log(`WebSocket server attached to existing server at path ${path}`);
+    // If no server is provided, use noServer mode for manual upgrade handling
+    if (!server) {
+      this.wss = new WebSocketServer({ noServer: true });
+      console.log(`WebSocket server initialized in noServer mode for path ${path}`);
     } else {
-      console.log(`WebSocket server listening on port ${port}${path}`);
+      this.wss = new WebSocketServer({ server, path });
+      console.log(`WebSocket server attached to existing server at path ${path}`);
     }
+    this.setupServer();
+  }
+
+  /**
+   * Handle WebSocket upgrade manually (for noServer mode)
+   */
+  public handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer) {
+    this.wss.handleUpgrade(req, socket, head, (ws) => {
+      this.wss.emit('connection', ws, req);
+    });
   }
 
   private setupServer() {
@@ -345,6 +354,8 @@ export class ControlWebSocketServer {
   }
 
   public async broadcastAgentConfig(agentId: string): Promise<void> {
+      console.log('Broadcasting Agent config to all connected gateways');
+
     const client = this.clients.get(agentId);
     if (!client || client.type !== 'agent' || !client.authenticated) {
       console.log(`Agent ${agentId} not connected; skipping config push`);

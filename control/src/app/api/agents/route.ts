@@ -56,6 +56,8 @@ export async function POST(request: NextRequest) {
       const wsServer = getWebSocketServer();
       if (wsServer) {
         await wsServer.broadcastGatewayConfig();
+      } else {
+        console.warn('WebSocket server not initialized; cannot broadcast agent creation config.');
       }
     } catch (err) {
       console.error('Failed to broadcast agent creation config:', err);

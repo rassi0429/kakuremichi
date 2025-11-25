@@ -1,6 +1,7 @@
 #!/usr/bin/env tsx
 
 import http from 'http';
+import { parse } from 'url';
 import next from 'next';
 import { initWebSocketServer } from './lib/ws';
 
@@ -14,12 +15,27 @@ async function start() {
 
   await app.prepare();
 
+  const upgrade = app.getUpgradeHandler();
+
   const server = http.createServer((req, res) => {
     handle(req, res);
   });
 
-  // Attach WebSocket server to the same HTTP server
-  const wsServer = initWebSocketServer(server, WS_PATH);
+  // Initialize WebSocket server in noServer mode
+  const wsServer = initWebSocketServer(undefined, WS_PATH);
+
+  // Handle upgrade requests manually
+  server.on('upgrade', (req, socket, head) => {
+    const { pathname } = parse(req.url || '/', true);
+
+    if (pathname === WS_PATH) {
+      // Our custom WebSocket endpoint
+      wsServer.handleUpgrade(req, socket, head);
+    } else {
+      // Let Next.js handle HMR and other upgrades
+      upgrade(req, socket, head);
+    }
+  });
 
   server.listen(PORT, () => {
     console.log(`HTTP/Next server ready on http://localhost:${PORT}`);
