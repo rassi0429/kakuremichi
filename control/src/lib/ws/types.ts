@@ -45,6 +45,7 @@ export interface AuthMessage extends BaseMessage {
   apiKey: string;
   clientType: 'gateway' | 'agent';
   publicKey?: string; // WireGuard public key
+  publicIp?: string; // Public IP address
 }
 
 /**

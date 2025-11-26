@@ -127,6 +127,7 @@ export class ControlWebSocketServer {
             status: 'online',
             lastSeenAt: new Date(),
             wireguardPublicKey: message.publicKey || null,
+            publicIp: message.publicIp || null,
           })
           .where(eq(gateways.id, clientId));
       } else if (message.clientType === 'agent') {
