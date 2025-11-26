@@ -177,8 +177,19 @@ export class ControlWebSocketServer {
 
       console.log(`${message.clientType} ${clientId} authenticated`);
 
-      // Send initial configuration
+      // Send initial configuration to the newly connected client
       await this.sendConfigToClient(clientId);
+
+      // Notify other clients about this client coming online
+      if (message.clientType === 'gateway') {
+        // Gateway came online - notify all Agents so they can update their peer list
+        console.log('Gateway came online, broadcasting config to all agents');
+        this.broadcastAllAgentConfigs().catch(console.error);
+      } else if (message.clientType === 'agent') {
+        // Agent came online - notify all Gateways so they can update their peer list
+        console.log('Agent came online, broadcasting config to all gateways');
+        this.broadcastGatewayConfig().catch(console.error);
+      }
     } catch (error) {
       console.error('Auth error:', error);
       this.send(ws, {
@@ -241,26 +252,34 @@ export class ControlWebSocketServer {
     });
   }
 
-  private removeClient(ws: WebSocket) {
+  private async removeClient(ws: WebSocket) {
     const client = Array.from(this.clients.entries()).find(
       ([_, c]) => c.ws === ws
     );
 
     if (client) {
       const [clientId, clientInfo] = client;
-      console.log(`Removing client ${clientId}`);
+      console.log(`Removing client ${clientId} (${clientInfo.type})`);
 
       // Update status to offline
       if (clientInfo.type === 'gateway') {
-        db.update(gateways)
+        await db.update(gateways)
           .set({ status: 'offline' })
           .where(eq(gateways.id, clientId))
           .catch(console.error);
+
+        // Gateway went offline - notify all Agents so they can update their peer list
+        console.log('Gateway went offline, broadcasting config to all agents');
+        this.broadcastAllAgentConfigs().catch(console.error);
       } else {
-        db.update(agents)
+        await db.update(agents)
           .set({ status: 'offline' })
           .where(eq(agents.id, clientId))
           .catch(console.error);
+
+        // Agent went offline - notify all Gateways so they can update their peer list
+        console.log('Agent went offline, broadcasting config to all gateways');
+        this.broadcastGatewayConfig().catch(console.error);
       }
 
       this.clients.delete(clientId);
@@ -399,22 +418,24 @@ export class ControlWebSocketServer {
     // Create a map of tunnelId -> this gateway's IP
     const gatewayIpByTunnel = new Map(gatewayIps.map(ip => [ip.tunnelId, ip.ip]));
 
-    // Build agent list with WireGuard info
+    // Build agent list with WireGuard info (only online agents)
     // Each agent's AllowedIPs should be the agentIPs of its tunnels
-    const agentList = allAgents.map((agent) => {
-      // Get all tunnels for this agent and collect their agentIPs
-      const agentTunnels = allTunnels.filter(t => t.agentId === agent.id);
-      const allowedIPs = agentTunnels
-        .filter(t => t.agentIp)
-        .map(t => `${t.agentIp}/32`);
+    const agentList = allAgents
+      .filter((agent) => agent.status === 'online') // Only include online agents
+      .map((agent) => {
+        // Get all tunnels for this agent and collect their agentIPs
+        const agentTunnels = allTunnels.filter(t => t.agentId === agent.id);
+        const allowedIPs = agentTunnels
+          .filter(t => t.agentIp)
+          .map(t => `${t.agentIp}/32`);
 
-      return {
-        id: agent.id,
-        name: agent.name,
-        wireguardPublicKey: agent.wireguardPublicKey,
-        allowedIPs, // List of /32 IPs for WireGuard peer config
-      };
-    });
+        return {
+          id: agent.id,
+          name: agent.name,
+          wireguardPublicKey: agent.wireguardPublicKey,
+          allowedIPs, // List of /32 IPs for WireGuard peer config
+        };
+      });
 
     // Build tunnel list with network info (including this gateway's IP)
     const tunnelList = allTunnels.map((tunnel) => ({
@@ -490,32 +511,41 @@ export class ControlWebSocketServer {
       gatewayIpsByTunnel.get(ip.tunnelId)!.push({ gatewayId: ip.gatewayId, ip: ip.ip });
     }
 
-    // Collect all unique gateway IPs across all tunnels, grouped by gateway
+    // Get set of online gateway IDs for filtering
+    const onlineGatewayIds = new Set(
+      allGateways.filter(gw => gw.status === 'online').map(gw => gw.id)
+    );
+
+    // Collect all unique gateway IPs across all tunnels, grouped by gateway (only online)
     const gatewayIpsByGateway = new Map<string, string[]>();
     for (const ip of relevantGatewayIps) {
+      if (!onlineGatewayIds.has(ip.gatewayId)) continue; // Skip offline gateways
       if (!gatewayIpsByGateway.has(ip.gatewayId)) {
         gatewayIpsByGateway.set(ip.gatewayId, []);
       }
       gatewayIpsByGateway.get(ip.gatewayId)!.push(`${ip.ip}/32`);
     }
 
-    // Build gateway list with endpoint and AllowedIPs
-    const gatewayList = allGateways.map((gw) => {
-      const allowedIPs = gatewayIpsByGateway.get(gw.id) || [];
+    // Build gateway list with endpoint and AllowedIPs (only online gateways)
+    const gatewayList = allGateways
+      .filter((gw) => gw.status === 'online') // Only include online gateways
+      .map((gw) => {
+        const allowedIPs = gatewayIpsByGateway.get(gw.id) || [];
 
-      return {
-        id: gw.id,
-        name: gw.name,
-        publicIp: gw.publicIp,
-        wireguardPublicKey: gw.wireguardPublicKey,
-        endpoint: gw.publicIp ? `${gw.publicIp}:51820` : null,
-        allowedIPs, // This gateway's IPs for WireGuard peer config
-      };
-    });
+        return {
+          id: gw.id,
+          name: gw.name,
+          publicIp: gw.publicIp,
+          wireguardPublicKey: gw.wireguardPublicKey,
+          endpoint: gw.publicIp ? `${gw.publicIp}:51820` : null,
+          allowedIPs, // This gateway's IPs for WireGuard peer config
+        };
+      });
 
-    // Build tunnel list with all gateway IPs
+    // Build tunnel list with gateway IPs (only for online gateways)
     const tunnelList = agentTunnels.map((tunnel) => {
-      const tunnelGatewayIpList = gatewayIpsByTunnel.get(tunnel.id) || [];
+      const tunnelGatewayIpList = (gatewayIpsByTunnel.get(tunnel.id) || [])
+        .filter(gip => onlineGatewayIds.has(gip.gatewayId)); // Only include online gateways
 
       return {
         id: tunnel.id,
@@ -524,7 +554,7 @@ export class ControlWebSocketServer {
         enabled: tunnel.enabled,
         subnet: tunnel.subnet,
         agentIp: tunnel.agentIp,
-        gatewayIps: tunnelGatewayIpList, // All gateway IPs for this tunnel
+        gatewayIps: tunnelGatewayIpList, // Gateway IPs for this tunnel (online only)
       };
     });
 
