@@ -6,8 +6,6 @@ interface Agent {
   id: string
   name: string
   apiKey: string
-  subnet: string | null
-  virtualIp: string | null
   wireguardPublicKey: string | null
   status: string
   lastSeenAt: string | null
@@ -114,8 +112,6 @@ export default function AgentsPage() {
               <tr>
                 <th>Name</th>
                 <th>Status</th>
-                <th>Virtual IP</th>
-                <th>Subnet</th>
                 <th>API Key</th>
                 <th>Last Seen</th>
                 <th>Actions</th>
@@ -130,8 +126,6 @@ export default function AgentsPage() {
                       {agent.status}
                     </span>
                   </td>
-                  <td><code>{agent.virtualIp || '-'}</code></td>
-                  <td><code>{agent.subnet || '-'}</code></td>
                   <td>
                     <code style={{ fontSize: '0.75rem' }}>
                       {agent.apiKey}

@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db, agents } from '@/lib/db';
 import { getWebSocketServer } from '@/lib/ws';
 import { createAgentSchema } from '@/lib/utils/validation';
-import { generateAgentApiKey, getNextSubnet, getVirtualIpFromSubnet } from '@/lib/utils';
-import { eq } from 'drizzle-orm';
+import { generateAgentApiKey } from '@/lib/utils';
 
 /**
  * GET /api/agents - List all agents
@@ -34,19 +33,13 @@ export async function POST(request: NextRequest) {
     // Generate API key
     const apiKey = generateAgentApiKey();
 
-    // Get next available subnet
-    const subnet = await getNextSubnet();
-    const virtualIp = getVirtualIpFromSubnet(subnet);
-
-    // Insert agent
+    // Insert agent (subnet is now assigned at tunnel level, not agent level)
     const newAgent = await db
       .insert(agents)
       .values({
         name: validatedData.name,
         apiKey,
         wireguardPublicKey: validatedData.wireguardPublicKey ?? null,
-        virtualIp,
-        subnet,
         status: 'offline',
       })
       .returning();

@@ -10,6 +10,10 @@ export const tunnels = sqliteTable('tunnels', {
   target: text('target', { length: 255 }).notNull(),
   enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
   description: text('description'),
+  // Network configuration (assigned automatically on tunnel creation)
+  subnet: text('subnet', { length: 18 }),      // e.g., "10.1.0.0/24"
+  agentIp: text('agent_ip', { length: 15 }),   // e.g., "10.1.0.2" (from front)
+  // Note: Gateway IPs are now stored in tunnel_gateway_ips table (multiple gateways per tunnel)
   createdAt: integer('created_at', { mode: 'timestamp' })
     .notNull()
     .$defaultFn(() => new Date()),

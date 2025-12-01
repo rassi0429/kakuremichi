@@ -22,6 +22,27 @@
       "when": 1763818229847,
       "tag": "0002_small_mindworm",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1764175400838,
+      "tag": "0003_big_stature",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1764176078894,
+      "tag": "0004_illegal_spirit",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1764177415295,
+      "tag": "0005_fuzzy_baron_zemo",
+      "breakpoints": true
     }
   ]
 }

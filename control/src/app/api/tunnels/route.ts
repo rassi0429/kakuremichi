@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, tunnels, agents } from '@/lib/db';
+import { db, tunnels, agents, tunnelGatewayIps, gateways } from '@/lib/db';
 import { getWebSocketServer } from '@/lib/ws';
-import { createTunnelSchema } from '@/lib/utils/validation';
+import { createTunnelSchema, allocateTunnelSubnet, allocateGatewayIpsForTunnel } from '@/lib/utils';
 import { eq } from 'drizzle-orm';
 
 /**
- * GET /api/tunnels - List all tunnels
+ * GET /api/tunnels - List all tunnels with gateway IPs
  */
 export async function GET() {
   try {
+    // Get all tunnels with agent info
     const allTunnels = await db
       .select({
         id: tunnels.id,
@@ -17,6 +18,8 @@ export async function GET() {
         target: tunnels.target,
         enabled: tunnels.enabled,
         description: tunnels.description,
+        subnet: tunnels.subnet,
+        agentIp: tunnels.agentIp,
         createdAt: tunnels.createdAt,
         updatedAt: tunnels.updatedAt,
         agent: {
@@ -28,7 +31,37 @@ export async function GET() {
       .from(tunnels)
       .leftJoin(agents, eq(tunnels.agentId, agents.id));
 
-    return NextResponse.json(allTunnels);
+    // Get gateway IPs for all tunnels
+    const allGatewayIps = await db
+      .select({
+        tunnelId: tunnelGatewayIps.tunnelId,
+        gatewayId: tunnelGatewayIps.gatewayId,
+        gatewayName: gateways.name,
+        ip: tunnelGatewayIps.ip,
+      })
+      .from(tunnelGatewayIps)
+      .innerJoin(gateways, eq(tunnelGatewayIps.gatewayId, gateways.id));
+
+    // Group gateway IPs by tunnel
+    const gatewayIpsByTunnel = new Map<string, Array<{ gatewayId: string; gatewayName: string; ip: string }>>();
+    for (const ip of allGatewayIps) {
+      if (!gatewayIpsByTunnel.has(ip.tunnelId)) {
+        gatewayIpsByTunnel.set(ip.tunnelId, []);
+      }
+      gatewayIpsByTunnel.get(ip.tunnelId)!.push({
+        gatewayId: ip.gatewayId,
+        gatewayName: ip.gatewayName,
+        ip: ip.ip,
+      });
+    }
+
+    // Add gateway IPs to each tunnel
+    const tunnelsWithGatewayIps = allTunnels.map(tunnel => ({
+      ...tunnel,
+      gatewayIps: gatewayIpsByTunnel.get(tunnel.id) || [],
+    }));
+
+    return NextResponse.json(tunnelsWithGatewayIps);
   } catch (error) {
     console.error('Failed to fetch tunnels:', error);
     return NextResponse.json(
@@ -59,7 +92,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
     }
 
-    // Insert tunnel
+    // Allocate a new subnet for this tunnel
+    const subnetAllocation = await allocateTunnelSubnet();
+
+    // Insert tunnel with subnet allocation (no gatewayIp - it's in tunnel_gateway_ips now)
     const newTunnel = await db
       .insert(tunnels)
       .values({
@@ -68,19 +104,31 @@ export async function POST(request: NextRequest) {
         target: validatedData.target,
         description: validatedData.description,
         enabled: true,
+        subnet: subnetAllocation.subnet,
+        agentIp: subnetAllocation.agentIp,
       })
       .returning();
 
     const createdTunnel = newTunnel[0];
 
+    // Allocate gateway IPs for all existing gateways
+    if (createdTunnel) {
+      await allocateGatewayIpsForTunnel(createdTunnel.id, subnetAllocation.subnet);
+    }
+
     // Push latest config to gateways and the target agent (if online)
     try {
       const wsServer = getWebSocketServer();
+      console.log('WebSocket server instance:', wsServer ? 'available' : 'NULL');
       if (wsServer) {
+        console.log('Broadcasting config to gateways...');
         await wsServer.broadcastGatewayConfig();
         if (createdTunnel?.agentId) {
+          console.log('Broadcasting config to agent:', createdTunnel.agentId);
           await wsServer.broadcastAgentConfig(createdTunnel.agentId);
         }
+      } else {
+        console.warn('WebSocket server not initialized, cannot broadcast config');
       }
     } catch (err) {
       console.error('Failed to broadcast tunnel creation config:', err);

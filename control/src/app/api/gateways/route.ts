@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, gateways } from '@/lib/db';
 import { createGatewaySchema } from '@/lib/utils/validation';
-import { generateGatewayApiKey } from '@/lib/utils';
+import { generateGatewayApiKey, allocateTunnelIpsForGateway } from '@/lib/utils';
+import { getWebSocketServer } from '@/lib/ws';
 
 /**
  * GET /api/gateways - List all gateways
@@ -45,7 +46,24 @@ export async function POST(request: NextRequest) {
       })
       .returning();
 
-    return NextResponse.json(newGateway[0], { status: 201 });
+    const createdGateway = newGateway[0];
+
+    // Allocate IPs for this gateway in all existing tunnels
+    if (createdGateway) {
+      await allocateTunnelIpsForGateway(createdGateway.id);
+    }
+
+    // Broadcast updated config to all agents (they need to know about the new gateway)
+    try {
+      const wsServer = getWebSocketServer();
+      if (wsServer) {
+        await wsServer.broadcastAllAgentConfigs();
+      }
+    } catch (err) {
+      console.error('Failed to broadcast gateway creation config:', err);
+    }
+
+    return NextResponse.json(createdGateway, { status: 201 });
   } catch (error) {
     console.error('Failed to create gateway:', error);
 

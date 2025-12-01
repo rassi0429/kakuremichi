@@ -2,12 +2,21 @@
 
 import { useEffect, useState } from 'react'
 
+interface GatewayIP {
+  gatewayId: string
+  gatewayName: string
+  ip: string
+}
+
 interface Tunnel {
   id: string
   domain: string
   target: string
   agentId: string
   enabled: boolean
+  subnet: string | null
+  agentIp: string | null
+  gatewayIps: GatewayIP[]
   createdAt: string
   updatedAt: string
 }
@@ -174,8 +183,8 @@ export default function TunnelsPage() {
                 <th>Domain</th>
                 <th>Target</th>
                 <th>Agent</th>
+                <th>Network</th>
                 <th>Status</th>
-                <th>Created</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -185,13 +194,31 @@ export default function TunnelsPage() {
                   <td><strong>{tunnel.domain}</strong></td>
                   <td><code>{tunnel.target}</code></td>
                   <td>{getAgentName(tunnel.agentId)}</td>
+                  <td style={{ fontSize: '0.75rem' }}>
+                    {tunnel.subnet ? (
+                      <div>
+                        <div><code>{tunnel.subnet}</code></div>
+                        <div style={{ color: '#666' }}>
+                          Agent: {tunnel.agentIp}
+                        </div>
+                        {tunnel.gatewayIps && tunnel.gatewayIps.length > 0 && (
+                          <div style={{ color: '#666', marginTop: '4px' }}>
+                            {tunnel.gatewayIps.map((gw) => (
+                              <div key={gw.gatewayId}>
+                                GW ({gw.gatewayName}): {gw.ip}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <span style={{ color: '#999' }}>-</span>
+                    )}
+                  </td>
                   <td>
                     <span className={`status ${tunnel.enabled ? 'online' : 'offline'}`}>
                       {tunnel.enabled ? 'Enabled' : 'Disabled'}
                     </span>
-                  </td>
-                  <td style={{ fontSize: '0.875rem', color: '#666' }}>
-                    {new Date(tunnel.createdAt).toLocaleDateString()}
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>

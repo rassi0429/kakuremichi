@@ -6,8 +6,10 @@ export const agents = sqliteTable('agents', {
   name: text('name', { length: 64 }).notNull(),
   apiKey: text('api_key', { length: 64 }).notNull().unique(),
   wireguardPublicKey: text('wireguard_public_key', { length: 256 }),
+  // Note: virtualIp and subnet are DEPRECATED - now assigned at tunnel level
+  // These columns will be removed in a future migration
   virtualIp: text('virtual_ip', { length: 15 }),
-  subnet: text('subnet', { length: 18 }).notNull().unique(),
+  subnet: text('subnet', { length: 18 }),
   status: text('status', { length: 16 }).notNull().default('offline'),
   lastSeenAt: integer('last_seen_at', { mode: 'timestamp' }),
   metadata: text('metadata', { mode: 'json' }),
