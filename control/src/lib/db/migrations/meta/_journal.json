@@ -43,6 +43,13 @@
       "when": 1764177415295,
       "tag": "0005_fuzzy_baron_zemo",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1764858072059,
+      "tag": "0006_parched_captain_america",
+      "breakpoints": true
     }
   ]
 }

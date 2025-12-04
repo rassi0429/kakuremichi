@@ -14,6 +14,9 @@ export const tunnels = sqliteTable('tunnels', {
   subnet: text('subnet', { length: 18 }),      // e.g., "10.1.0.0/24"
   agentIp: text('agent_ip', { length: 15 }),   // e.g., "10.1.0.2" (from front)
   // Note: Gateway IPs are now stored in tunnel_gateway_ips table (multiple gateways per tunnel)
+  // Exit Node (Outbound Proxy) settings
+  httpProxyEnabled: integer('http_proxy_enabled', { mode: 'boolean' }).notNull().default(false),
+  socksProxyEnabled: integer('socks_proxy_enabled', { mode: 'boolean' }).notNull().default(false),
   createdAt: integer('created_at', { mode: 'timestamp' })
     .notNull()
     .$defaultFn(() => new Date()),

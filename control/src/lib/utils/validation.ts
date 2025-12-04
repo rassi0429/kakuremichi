@@ -70,6 +70,9 @@ export const createTunnelSchema = z.object({
   agentId: z.string().uuid('Invalid agent ID'),
   target: targetSchema,
   description: z.string().max(500).optional(),
+  // Exit Node (Outbound Proxy) settings
+  httpProxyEnabled: z.boolean().optional().default(false),
+  socksProxyEnabled: z.boolean().optional().default(false),
 });
 
 /**
@@ -80,4 +83,7 @@ export const updateTunnelSchema = z.object({
   target: targetSchema.optional(),
   enabled: z.boolean().optional(),
   description: z.string().max(500).optional(),
+  // Exit Node (Outbound Proxy) settings
+  httpProxyEnabled: z.boolean().optional(),
+  socksProxyEnabled: z.boolean().optional(),
 });

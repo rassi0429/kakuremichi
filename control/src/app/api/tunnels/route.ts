@@ -20,6 +20,8 @@ export async function GET() {
         description: tunnels.description,
         subnet: tunnels.subnet,
         agentIp: tunnels.agentIp,
+        httpProxyEnabled: tunnels.httpProxyEnabled,
+        socksProxyEnabled: tunnels.socksProxyEnabled,
         createdAt: tunnels.createdAt,
         updatedAt: tunnels.updatedAt,
         agent: {
@@ -106,6 +108,9 @@ export async function POST(request: NextRequest) {
         enabled: true,
         subnet: subnetAllocation.subnet,
         agentIp: subnetAllocation.agentIp,
+        // Exit Node (Outbound Proxy) settings
+        httpProxyEnabled: validatedData.httpProxyEnabled ?? false,
+        socksProxyEnabled: validatedData.socksProxyEnabled ?? false,
       })
       .returning();
 

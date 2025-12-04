@@ -114,6 +114,14 @@ export interface ErrorMessage extends BaseMessage {
 }
 
 /**
+ * Exit Node proxy configuration (fixed ports)
+ */
+export const PROXY_PORTS = {
+  HTTP: 8080,
+  SOCKS5: 1080,
+} as const;
+
+/**
  * Gateway configuration
  */
 export interface GatewayConfig {
@@ -126,6 +134,11 @@ export interface GatewayConfig {
     virtualIp: string;
   }>;
   tunnels: Array<Tunnel & { agentId: string }>;
+  // Exit Node proxy configuration
+  proxyConfig: {
+    httpProxyPort: number;
+    socksProxyPort: number;
+  };
 }
 
 /**
@@ -140,6 +153,12 @@ export interface AgentConfig {
     publicIp: string;
   }>;
   tunnels: Array<Tunnel>;
+  // Exit Node proxy configuration
+  proxyConfig: {
+    httpProxyPort: number;
+    socksProxyPort: number;
+    localListenAddr: string; // "localhost" or "0.0.0.0"
+  };
 }
 
 /**

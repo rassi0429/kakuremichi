@@ -17,6 +17,8 @@ interface Tunnel {
   subnet: string | null
   agentIp: string | null
   gatewayIps: GatewayIP[]
+  httpProxyEnabled: boolean
+  socksProxyEnabled: boolean
   createdAt: string
   updatedAt: string
 }
@@ -36,6 +38,8 @@ export default function TunnelsPage() {
     domain: '',
     target: '',
     agentId: '',
+    httpProxyEnabled: false,
+    socksProxyEnabled: false,
   })
 
   useEffect(() => {
@@ -78,7 +82,7 @@ export default function TunnelsPage() {
 
       if (!res.ok) throw new Error('Failed to create tunnel')
 
-      setFormData({ domain: '', target: '', agentId: '' })
+      setFormData({ domain: '', target: '', agentId: '', httpProxyEnabled: false, socksProxyEnabled: false })
       setShowNewForm(false)
       fetchData()
     } catch (err) {
@@ -168,6 +172,27 @@ export default function TunnelsPage() {
               ))}
             </select>
           </div>
+          <div style={{ marginTop: '1rem', marginBottom: '1rem' }}>
+            <h3 style={{ fontSize: '0.875rem', marginBottom: '0.5rem', color: '#666' }}>Exit Node Settings</h3>
+            <div style={{ display: 'flex', gap: '1.5rem' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={formData.httpProxyEnabled}
+                  onChange={(e) => setFormData({ ...formData, httpProxyEnabled: e.target.checked })}
+                />
+                <span>Enable HTTP Proxy (localhost:8080)</span>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={formData.socksProxyEnabled}
+                  onChange={(e) => setFormData({ ...formData, socksProxyEnabled: e.target.checked })}
+                />
+                <span>Enable SOCKS5 Proxy (localhost:1080)</span>
+              </label>
+            </div>
+          </div>
           <button onClick={createTunnel}>Create Tunnel</button>
         </div>
       )}
@@ -184,6 +209,7 @@ export default function TunnelsPage() {
                 <th>Target</th>
                 <th>Agent</th>
                 <th>Network</th>
+                <th>Exit Node</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
@@ -209,6 +235,32 @@ export default function TunnelsPage() {
                               </div>
                             ))}
                           </div>
+                        )}
+                      </div>
+                    ) : (
+                      <span style={{ color: '#999' }}>-</span>
+                    )}
+                  </td>
+                  <td style={{ fontSize: '0.75rem' }}>
+                    {(tunnel.httpProxyEnabled || tunnel.socksProxyEnabled) ? (
+                      <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                        {tunnel.httpProxyEnabled && (
+                          <span style={{
+                            background: '#e3f2fd',
+                            color: '#1565c0',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            fontSize: '0.7rem'
+                          }}>HTTP</span>
+                        )}
+                        {tunnel.socksProxyEnabled && (
+                          <span style={{
+                            background: '#f3e5f5',
+                            color: '#7b1fa2',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            fontSize: '0.7rem'
+                          }}>SOCKS5</span>
                         )}
                       </div>
                     ) : (

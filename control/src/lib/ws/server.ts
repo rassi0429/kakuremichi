@@ -9,6 +9,7 @@ import type {
   ConnectedClient,
   MessageType,
 } from './types';
+import { PROXY_PORTS } from './types';
 
 /**
  * WebSocket server for Control ⇔ Gateway/Agent communication
@@ -447,11 +448,19 @@ export class ControlWebSocketServer {
       subnet: tunnel.subnet,
       gatewayIp: gatewayIpByTunnel.get(tunnel.id) || null, // This gateway's IP for this tunnel
       agentIp: tunnel.agentIp,
+      // Exit Node (Outbound Proxy) settings
+      httpProxyEnabled: tunnel.httpProxyEnabled,
+      socksProxyEnabled: tunnel.socksProxyEnabled,
     }));
 
     const config = {
       agents: agentList,
       tunnels: tunnelList,
+      // Exit Node proxy configuration
+      proxyConfig: {
+        httpProxyPort: PROXY_PORTS.HTTP,
+        socksProxyPort: PROXY_PORTS.SOCKS5,
+      },
     };
 
     this.send(ws, {
@@ -555,6 +564,9 @@ export class ControlWebSocketServer {
         subnet: tunnel.subnet,
         agentIp: tunnel.agentIp,
         gatewayIps: tunnelGatewayIpList, // Gateway IPs for this tunnel (online only)
+        // Exit Node (Outbound Proxy) settings
+        httpProxyEnabled: tunnel.httpProxyEnabled,
+        socksProxyEnabled: tunnel.socksProxyEnabled,
       };
     });
 
@@ -566,6 +578,12 @@ export class ControlWebSocketServer {
       },
       gateways: gatewayList,
       tunnels: tunnelList,
+      // Exit Node proxy configuration
+      proxyConfig: {
+        httpProxyPort: PROXY_PORTS.HTTP,
+        socksProxyPort: PROXY_PORTS.SOCKS5,
+        localListenAddr: 'localhost',
+      },
     };
 
     this.send(ws, {
